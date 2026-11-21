@@ -11,6 +11,7 @@ internal sealed class ChairVisits
     private float nextRoll;
     private bool sitting;
     internal bool Performed { get; private set; }
+    internal Piece? Target => target ? target!.GetComponent<Piece>() : null;
     internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + approach.ToString("F2") + (sitting ? " seated" : " approaching") : "none";
 
     internal bool TryBegin(Maid maid, Coffin home, List<Piece> pieces)
@@ -18,18 +19,21 @@ internal sealed class ChairVisits
         target = null; sitting = false;
         Performed = false;
         var best = float.PositiveInfinity;
+        var bestRecent = long.MaxValue;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
         foreach (var piece in pieces)
         {
-            if (!Eligible(piece, home, range)) continue;
+            if (!Eligible(piece, home, range) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var chair = piece.GetComponent<Chair>();
             if (!chair || chair.m_inShip || !chair.m_attachPoint || !MaidSeating.SupportedPose(chair) || MaidSeating.IsInUse(chair)) continue;
             var point = chair.m_attachPoint.position + chair.transform.forward;
             if (!IdleActivities.Floor(point, piece.transform.position.y, out point)) continue;
             if ((point - home.transform.position).sqrMagnitude > Plugin.Radius.Value * Plugin.Radius.Value) continue;
             var distance = (point - maid.transform.position).sqrMagnitude;
-            if (distance >= best) continue;
+            var recent = TaskClaims.Recent(piece);
+            if (!TaskClaimPolicy.Prefer(recent, distance, bestRecent, best)) continue;
             best = distance; target = chair; approach = point;
+            bestRecent = recent;
         }
         deadline = Time.time + 20f;
         return target;

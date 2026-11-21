@@ -97,9 +97,51 @@ var checks = new (string Name, bool Passed)[]
     ("small physics jitter does not hide an obstruction", JitterStillRetries()),
 };
 checks = checks.Concat(IdleChecks()).ToArray();
+checks = checks.Concat(ReservationChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> ReservationChecks()
+{
+    var claims = new List<TaskClaim>();
+    var now = 100L;
+    // Simulate three independently scanning tiers: each sees claims as soon as
+    // another maid chooses a destination, before either starts its animation.
+    var selected = new List<string>();
+    foreach (var maid in new[] { "tier0", "tier1", "tier2" })
+    {
+        var target = new[] { "wall", "smelter", "torch" }.First(t => TaskClaimPolicy.Available(claims, t, maid, true, now));
+        selected.Add(target);
+        claims.Add(new TaskClaim(maid, target, "work", true, now, 115));
+    }
+    yield return ("three tiers choose three different available jobs", selected.Distinct().Count() == 3);
+    yield return ("a claimed job stays out of another maid's selection", !TaskClaimPolicy.Available(claims, "wall", "tier1", true, now));
+    yield return ("the current worker retains her own job", TaskClaimPolicy.Available(claims, "wall", "tier0", true, now));
+    yield return ("a busy destination cannot attract a cosmetic visit", !TaskClaimPolicy.Available(claims, "smelter", "idle", false, now));
+    yield return ("expiry frees an abandoned job at its boundary", TaskClaimPolicy.Available(claims, "wall", "other", true, 115));
+    yield return ("an unexpired job is still reserved", !TaskClaimPolicy.Available(claims, "wall", "other", true, 114));
+    claims.RemoveAll(c => c.Maid == "tier0");
+    yield return ("release on cancel or death frees the job immediately", TaskClaimPolicy.Available(claims, "wall", "other", true, now));
+    var idle = new TaskClaim("idle", "chair", "sit", false, 90, 115);
+    yield return ("an approach reserves a chair before sitting", !TaskClaimPolicy.Available(new[] { idle }, "chair", "other", false, now));
+    yield return ("real work can preempt an idle visit", TaskClaimPolicy.Available(new[] { idle }, "chair", "worker", true, now));
+    var work = new TaskClaim("worker", "chair", "repair", true, 100, 115);
+    yield return ("a repair outranks an older idle visit", TaskClaimPolicy.Winner(new[] { idle, work }, "chair", now)?.Maid == "worker");
+    var first = new TaskClaim("b", "wall", "repair", true, 95, 115);
+    var second = new TaskClaim("a", "wall", "repair", true, 96, 115);
+    yield return ("an earlier active worker wins a remote claim race", TaskClaimPolicy.Winner(new[] { second, first }, "wall", now)?.Maid == "b");
+    var tie = new TaskClaim("a", "wall", "repair", true, 95, 115);
+    yield return ("simultaneous claims have a peer-independent winner", TaskClaimPolicy.Winner(new[] { first, tie }, "wall", now)?.Maid == "a"
+        && TaskClaimPolicy.Winner(new[] { tie, first }, "wall", now)?.Maid == "a");
+    yield return ("a disconnected owner's expiry admits a replacement", TaskClaimPolicy.Winner(new[] { first, new TaskClaim("new", "wall", "repair", true, 115, 130) }, "wall", 116)?.Maid == "new");
+    yield return ("a future claim after clock rewind cannot block work", TaskClaimPolicy.Available(new[] { first }, "wall", "other", true, 94));
+    yield return ("claims for another structure do not interfere", TaskClaimPolicy.Available(new[] { first }, "smelter", "other", true, now));
+    yield return ("an untouched task outranks a nearby recently started task", TaskClaimPolicy.Prefer(0, 900, 95, 1));
+    yield return ("recently started tasks move behind untouched tasks", !TaskClaimPolicy.Prefer(95, 1, 0, 900));
+    yield return ("least recently started tasks lead when all were visited", TaskClaimPolicy.Prefer(90, 900, 95, 1));
+    yield return ("equal recency retains nearest-job selection", TaskClaimPolicy.Prefer(0, 1, 0, 900));
+}
 
 static bool StalledRouteRetries()
 {

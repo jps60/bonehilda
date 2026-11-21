@@ -15,6 +15,7 @@ internal sealed class TrophyVisits
     private float deadline;
     private bool reacting;
     internal bool Performed { get; private set; }
+    internal Piece? Target => target ? target!.GetComponent<Piece>() : null;
     internal string Describe => target ? item + " " + standingPoint.ToString("F2") + (reacting ? " emoting" : " approaching") : "none";
 
     internal static void Configure()
@@ -34,10 +35,11 @@ internal sealed class TrophyVisits
         target = null;
         Performed = false;
         var best = float.PositiveInfinity;
+        var bestRecent = long.MaxValue;
         var previous = maid.View.GetZDO().GetZDOID("BH_lastTrophy");
         foreach (var piece in pieces)
         {
-            if (!Eligible(piece, home)) continue;
+            if (!Eligible(piece, home) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var stand = piece.GetComponent<ItemStand>();
             if (!stand) continue;
             var name = ItemName(stand);
@@ -54,8 +56,10 @@ internal sealed class TrophyVisits
             // Prefer a different display without turning a single trophy into a dead end.
             var view = piece.GetComponent<ZNetView>();
             if (view && view.IsValid() && view.GetZDO().m_uid == previous) score += 10000f;
-            if (score >= best) continue;
+            var recent = TaskClaims.Recent(piece);
+            if (!TaskClaimPolicy.Prefer(recent, score, bestRecent, best)) continue;
             best = score; target = stand; item = name; standingPoint = point;
+            bestRecent = recent;
         }
         deadline = Time.time + Mathf.Min(30f, Plugin.JobTimeout.Value);
         reacting = false;

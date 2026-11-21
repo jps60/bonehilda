@@ -11,6 +11,7 @@ internal sealed class IdleActivities
     private readonly TrophyVisits trophy = new TrophyVisits();
     private readonly ChairVisits chair = new ChairVisits();
     private int active;
+    private Piece? Target => active == IdleDeck.Dust ? dust.Target : active == IdleDeck.Trophy ? trophy.Target : chair.Target;
     internal string Describe => active == IdleDeck.Dust ? "dust: " + dust.Describe
         : active == IdleDeck.Trophy ? "trophy: " + trophy.Describe : active == IdleDeck.Sit ? "chair: " + chair.Describe : "wandering / cooldown";
 
@@ -25,6 +26,7 @@ internal sealed class IdleActivities
             var next = IdleTiming.ClampPending(now, pending, Plugin.DustingInterval.Value);
             if (next != pending) data.Set(NextVisitKey, next);
             if (now < next) return false;
+            TaskClaims.ObserveRecent();
             var available = dust.TryBegin(maid, ai, home, pieces) ? IdleDeck.Dust : 0;
             if (Plugin.TrophyReactions.Value && trophy.TryBegin(maid, home, pieces)) available |= IdleDeck.Trophy;
             if (Plugin.IdleSitting.Value && chair.TryBegin(maid, home, pieces)) available |= IdleDeck.Sit;
@@ -36,7 +38,9 @@ internal sealed class IdleActivities
             if (active != IdleDeck.Trophy) trophy.Cancel(maid);
             if (active != IdleDeck.Sit) chair.Cancel(maid);
             if (active == 0) { Schedule(data, false); return false; }
+            if (!Target || !TaskClaims.TryClaim(maid, Target!, "idle: " + active, work: false)) { Cancel(maid); return false; }
         }
+        if (!Target || !TaskClaims.Holds(maid, Target!, work: false)) { Cancel(maid); return false; }
         var running = active == IdleDeck.Dust ? dust.Tick(maid, ai, home, delta)
             : active == IdleDeck.Trophy ? Plugin.TrophyReactions.Value && trophy.Tick(maid, ai, home, delta)
             : Plugin.IdleSitting.Value && chair.Tick(maid, ai, home, delta);
@@ -47,6 +51,7 @@ internal sealed class IdleActivities
 
     internal void Cancel(Maid maid)
     {
+        TaskClaims.Release(maid, idleOnly: true);
         var performed = active == IdleDeck.Dust ? dust.Performed
             : active == IdleDeck.Trophy ? trophy.Performed
             : active == IdleDeck.Sit && chair.Performed;

@@ -59,7 +59,7 @@ public sealed class Maid : MonoBehaviour
     }
     private enum WorkPhase { None, Drawing, Repairing, Recovering, Holstering, Supplying, FinishingSupply }
     private void OnEnable() => Loaded.Add(this);
-    private void OnDisable() => Loaded.Remove(this);
+    private void OnDisable() { TaskClaims.Release(this); Loaded.Remove(this); }
 
     private sealed class Job
     {
@@ -76,7 +76,7 @@ public sealed class Maid : MonoBehaviour
         ai = GetComponent<MonsterAI>();
         animations = GetComponent<WorkAnimations>();
         cargo = new Inventory("Bonehilda's hands", null!, 1, 1);
-        character.m_onDeath += DropCargo;
+        character.m_onDeath += () => { TaskClaims.Release(this); DropCargo(); };
         View.Register<ZDOID>("BH_ToggleReturn", ToggleReturn);
     }
 
@@ -191,6 +191,7 @@ public sealed class Maid : MonoBehaviour
         }
         if (!wasOwner)
         {
+            TaskClaims.Release(this);
             StopNavigation();
             ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
             ai.ResetRandomMovement();
@@ -204,6 +205,7 @@ public sealed class Maid : MonoBehaviour
         ClearCombatState();
         EnsureDefaultName();
         LoadCargo();
+        TaskClaims.Refresh(this);
         // Finish a door she opened before resuming work, idle, or dismissal.
         if (doors.Tick(this, ai, Time.deltaTime)) return;
         var homeId = View.GetZDO().GetZDOID(HomeKey);
@@ -529,14 +531,17 @@ public sealed class Maid : MonoBehaviour
     {
         pieces.Clear();
         Piece.GetAllPiecesInRadius(home.transform.position, Plugin.Radius.Value, pieces);
+        TaskClaims.ObserveRecent();
         Job? best = null;
         var bestDistance = float.MaxValue;
+        var bestRecent = long.MaxValue;
         foreach (var piece in pieces)
         {
             if (!piece || !piece.IsPlacedByPlayer() || !Allowed(piece.transform.position, home.Piece.GetCreator())) continue;
             var view = piece.GetComponent<ZNetView>();
             if (!view || !view.IsValid()) continue;
             if (skipped.TryGetValue(view.GetZDO().m_uid, out var until) && Time.time < until) continue;
+            if (!TaskClaims.Available(this, piece, work: true)) continue;
             var wear = piece.GetComponent<WearNTear>();
             var candidate = new Job { Piece = piece, View = view };
             candidate.Supply = repairsOnly ? null : SupplyTarget.ForPiece(piece)
@@ -549,17 +554,20 @@ public sealed class Maid : MonoBehaviour
                 else continue;
             }
             var distance = (piece.transform.position - transform.position).sqrMagnitude;
-            if (distance >= bestDistance) continue;
+            var recent = TaskClaims.Recent(piece);
+            if (!TaskClaimPolicy.Prefer(recent, distance, bestRecent, bestDistance)) continue;
             best = candidate;
             bestDistance = distance;
+            bestRecent = recent;
         }
         // Bound the temporary cooldown cache in long-running worlds.
         foreach (var key in skipped.Where(x => x.Value < Time.time).Select(x => x.Key).ToArray()) skipped.Remove(key);
         if (lastSupplied.Count > 1024) lastSupplied.Clear();
-        return best;
+        return best != null && TaskClaims.TryClaim(this, best.Piece, best.Wear ? "repair" : "supply: " + best.Supply!.Kind, work: true) ? best : null;
     }
 
     private bool Valid(Job candidate, Coffin home) => candidate.Piece && candidate.View && candidate.View.IsValid()
+        && TaskClaims.Holds(this, candidate.Piece, work: true)
         && candidate.Piece.IsPlacedByPlayer()
         && MaintenancePolicy.InRadius((candidate.Piece.transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
         && Allowed(candidate.Piece.transform.position, home.Piece.GetCreator())
@@ -841,6 +849,7 @@ public sealed class Maid : MonoBehaviour
 
     private void SkipCurrentJob()
     {
+        if (job != null && job.Piece) TaskClaims.Release(this, job.Piece);
         if (job != null && job.View && job.View.IsValid())
             skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(10f, Plugin.ScanInterval.Value * 2f);
     }
@@ -855,6 +864,7 @@ public sealed class Maid : MonoBehaviour
             jobAge = job == null ? 0 : Time.time - jobStarted, pathNodes = ai.m_path.Count, repairRetries = repairRetries.Count, skippedJobs = skipped.Count,
             navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
             door = doors.Describe(this),
+            reservation = TaskClaims.Describe(this),
             homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
             idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
         var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));

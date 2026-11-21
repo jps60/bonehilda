@@ -10,7 +10,7 @@ namespace Bonehilda;
 [Serializable]
 internal sealed class MaidActivity
 {
-    public string id = "", name = "", activity = "", phase = "", target = "", targetId = "", cargo = "", idle = "", door = "", station = "";
+    public string id = "", name = "", activity = "", phase = "", target = "", targetId = "", cargo = "", idle = "", door = "", station = "", reservation = "";
     public int stars, pathNodes, repairRetries, skippedJobs;
     public bool localOwner, alerted, hasCargo, hasStation, inReach, targetNeedsItem, recovering, homeLoaded, chestInUse;
     public Vector3 position, targetPosition, workPoint, navigationGoal, recoveryPoint, homePosition;

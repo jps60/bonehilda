@@ -13,6 +13,7 @@ internal sealed class Housekeeping
     private bool sweeping;
     private bool attempted;
     internal bool Performed { get; private set; }
+    internal Piece? Target => target;
     internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + target.transform.position.ToString("F2") + (sweeping ? " dusting" : " approaching") : "none";
 
     internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces)
@@ -21,15 +22,18 @@ internal sealed class Housekeeping
         attempted = false;
         Performed = false;
         var distance = float.MaxValue;
+        var bestRecent = long.MaxValue;
         foreach (var piece in pieces)
         {
-            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange)) continue;
+            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var d = (piece.transform.position - maid.transform.position).sqrMagnitude + (piece == previous ? 10000f : 0f);
-            if (d >= distance) continue;
+            var recent = TaskClaims.Recent(piece);
+            if (!TaskClaimPolicy.Prefer(recent, d, bestRecent, distance)) continue;
             if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
             target = piece;
             localPoint = piece.transform.InverseTransformPoint(candidatePoint);
             distance = d;
+            bestRecent = recent;
         }
         if (target == null) previous = null;
         deadline = Time.time + 16f;
