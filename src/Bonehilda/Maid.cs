@@ -35,6 +35,7 @@ public sealed class Maid : MonoBehaviour
     private float jobStarted;
     private float nextHomeCheck;
     private bool wasOwner;
+    private readonly Housekeeping housekeeping = new Housekeeping();
     private WorkPhase phase;
     private float phaseEnds;
     private int dressLevel = -1;
@@ -178,6 +179,7 @@ public sealed class Maid : MonoBehaviour
             job = null;
             phase = WorkPhase.None;
             animations.SetHammer(false, false);
+            housekeeping.Cancel(View);
             wasOwner = true;
         }
         EnsureDefaultName();
@@ -231,16 +233,16 @@ public sealed class Maid : MonoBehaviour
             var direction = exit - transform.position;
             direction.y = 0;
             var elapsed = (ZNet.instance.GetTime().Ticks - View.GetZDO().GetLong("BH_exitStarted")) / (double)TimeSpan.TicksPerSecond;
-            if (direction.magnitude > 0.3f && elapsed < 12)
+            if (!home.DoorOpen) { ai.StopMoving(); return; }
+            if (direction.magnitude > (elapsed > 7 ? .65f : .3f) && Vector3.Distance(transform.position, home.transform.position) < 5f)
             {
-                ai.MoveTowards(direction, false);
+                if (elapsed > 7) ai.MoveTo(delta, exit, .25f, false);
+                else ai.MoveTowards(direction, false);
                 return;
             }
             View.GetZDO().Set(ExitingKey, false);
             SetCoffinPassage(null);
-            ai.StopMoving();
-            nextScan = Time.time + 0.5f;
-            return;
+            nextScan = Time.time;
         }
         if (!MaintenancePolicy.InRadius((transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value + 1f))
         {
@@ -267,16 +269,22 @@ public sealed class Maid : MonoBehaviour
             nextScan = Time.time + Plugin.ScanInterval.Value;
             job = FindJob(home);
             jobStarted = Time.time;
+            if (job != null) housekeeping.Cancel(View);
         }
         if (job == null)
         {
             if (Plugin.Wander.Value)
             {
                 ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
+                if (housekeeping.Tick(this, ai, home, pieces, delta)) return;
                 ai.RandomMovement(delta, home.transform.position, false);
             }
-            else if (Vector3.Distance(transform.position, home.transform.position) > 3f) ai.MoveTo(delta, home.transform.position, 2f, false);
-            else ai.StopMoving();
+            else
+            {
+                housekeeping.Cancel(View);
+                if (Vector3.Distance(transform.position, home.transform.position) > 3f) ai.MoveTo(delta, home.transform.position, 2f, false);
+                else ai.StopMoving();
+            }
             return;
         }
         if (job.Supply != null && cargo.GetAllItems().Count == 0)
@@ -308,15 +316,20 @@ public sealed class Maid : MonoBehaviour
         var data = View.GetZDO();
         if (!data.GetBool("BH_entering"))
         {
-            var front = home.ExitPosition;
+            var front = home.ApproachPosition;
             var distance = front - transform.position; distance.y = 0;
             var local = home.transform.InverseTransformPoint(transform.position);
             // BaseAI stops within at least 0.5 m, even when asked for 0.2 m.
             // Accept a wider staging area and steer directly for the final few steps.
             if (distance.magnitude > 0.85f || Mathf.Abs(local.x) > 0.55f || Mathf.Abs(local.y) > 0.8f)
             {
-                if (MaintenancePolicy.NearCoffinApproach(local.x, local.y, local.z)) ai.MoveTowards(distance, false);
-                else ai.MoveTo(delta, front, 0.65f, distance.magnitude > 5f);
+                // The final navmesh node can end short of a coffin on player-built flooring.
+                // Walk the remaining clear stretch, but keep pathfinding around furniture.
+                var clearApproach = distance.sqrMagnitude <= 16f && Mathf.Abs(local.y) <= .8f
+                    && !Physics.SphereCast(transform.position + Vector3.up * .5f, .28f, distance.normalized,
+                        out _, distance.magnitude, LayerMask.GetMask("piece", "terrain", "static_solid"));
+                if (clearApproach || MaintenancePolicy.NearCoffinApproach(local.x, local.y, local.z)) ai.MoveTowards(distance, false);
+                else ai.MoveTo(delta, front, 0.65f, false);
                 return;
             }
             ai.StopMoving();
@@ -471,7 +484,7 @@ public sealed class Maid : MonoBehaviour
         ? Plugin.Refuel.Value : Plugin.SupplyMachines.Value;
     private static string SupplyKey(Job job) => job.View.GetZDO().m_uid + ":" + job.Supply!.Kind;
 
-    private static bool Allowed(Vector3 point, long playerId)
+    internal static bool Allowed(Vector3 point, long playerId)
     {
         // Evaluate permissions for the coffin's builder, including on a headless server.
         var wards = (List<PrivateArea>)WardList.GetValue(null);
@@ -510,7 +523,7 @@ public sealed class Maid : MonoBehaviour
         return point;
     }
 
-    private bool CanReach(Piece piece, Vector3 point)
+    internal bool CanReach(Piece piece, Vector3 point)
     {
         if (Mathf.Abs(point.y - transform.position.y) > 2.8f) return false;
         if (!Physics.Linecast(transform.position + Vector3.up, point, out var hit, LayerMask.GetMask("piece", "terrain", "static_solid"))) return true;
@@ -535,7 +548,6 @@ public sealed class Maid : MonoBehaviour
             home.HoldDoor();
             ai.LookAt(home.transform.position);
             animations.Interact();
-            WorkSounds.Play(home.Chest.m_openEffects, home.transform.position, home.transform.rotation);
             nextAction = Time.time + 0.55f;
             jobStarted = Time.time; // Give the outbound walk its own timeout after collection.
         }
@@ -556,12 +568,12 @@ public sealed class Maid : MonoBehaviour
         home.HoldDoor();
         ai.LookAt(home.transform.position);
         animations.Interact();
-        WorkSounds.Play(home.Chest.m_closeEffects, home.transform.position, home.transform.rotation);
         nextAction = Time.time + 0.55f;
     }
 
     private void CancelJob()
     {
+        housekeeping.Cancel(View);
         if (phase == WorkPhase.Drawing || phase == WorkPhase.Repairing || phase == WorkPhase.Recovering)
             animations.SetHammer(false);
         phase = WorkPhase.None;

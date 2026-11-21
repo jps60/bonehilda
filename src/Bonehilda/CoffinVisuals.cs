@@ -48,15 +48,20 @@ internal static class CoffinVisuals
         if (ember.HasProperty("_EmissionMap")) ember.SetTexture("_EmissionMap", palette.mainTexture);
         if (ember.HasProperty("_EmissionColor")) ember.SetColor("_EmissionColor", new Color(1.8f, 1.30f, .60f));
         Model(door, "candle-" + stars, palette);
-        var flame = Model(door, "flame-" + stars, ember);
-        var candle = Visuals.Child(door, "Candlelight");
-        candle.localPosition = flame.GetComponent<MeshFilter>().sharedMesh.bounds.center + Vector3.forward * .029f;
+        var wick = Visuals.Child(door, "BH_Wick");
+        var flame = Model(wick, "flame-" + stars, ember);
+        var bounds = flame.GetComponent<MeshFilter>().sharedMesh.bounds;
+        wick.localPosition = bounds.center - Vector3.up * bounds.extents.y;
+        flame.localPosition = -wick.localPosition;
+        var candle = Visuals.Child(wick, "Candlelight");
+        candle.localPosition = Vector3.up * bounds.extents.y + Vector3.forward * .029f;
         var light = candle.gameObject.AddComponent<Light>();
         light.type = LightType.Point;
         light.color = new Color(1f, .63f, .29f);
         light.intensity = .85f;
         light.range = 1.45f;
         light.shadows = LightShadows.None;
+        wick.gameObject.AddComponent<CandleFlame>();
 
         var chest = prefab.GetComponent<Container>();
         // Coffin animates a real hinge; the vanilla chest toggles two static lid objects.

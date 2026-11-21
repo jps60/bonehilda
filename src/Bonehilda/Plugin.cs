@@ -81,6 +81,9 @@ public sealed class Plugin : BaseUnityPlugin
             character.m_randomArmor = Array.Empty<GameObject>();
             WorkAnimations.Configure(prefab, PrefabManager.Instance.GetPrefab("Player"));
             Visuals.Dress(prefab.transform);
+            // Apply after binding the garment so both the body and cloth grow together.
+            prefab.GetComponentInChildren<Animator>(true).transform.localScale *= 1.04f;
+            prefab.AddComponent<FeatherDuster>();
             var drops = prefab.GetComponent<CharacterDrop>();
             if (drops) drops.m_drops.Clear();
             var tame = prefab.GetComponent<Tameable>() ?? prefab.AddComponent<Tameable>();
@@ -95,6 +98,7 @@ public sealed class Plugin : BaseUnityPlugin
             tame.m_unsummonOnOwnerLogoutSeconds = 0f;
             var ai = prefab.GetComponent<MonsterAI>();
             ai.m_despawnInDay = false;
+            ai.m_randomMoveInterval = 2f;
             ai.m_consumeItems.Clear();
             prefab.AddComponent<Maid>();
             if (!CreatureManager.Instance.AddCreature(maid))
@@ -133,7 +137,9 @@ public sealed class Plugin : BaseUnityPlugin
         container.m_width = tier.Width;
         container.m_height = tier.Height;
         Visuals.BuildCoffin(coffin.PiecePrefab, tier.Stars);
-        coffin.PiecePrefab.AddComponent<Coffin>().Stars = tier.Stars;
+        var furnishing = coffin.PiecePrefab.AddComponent<Coffin>();
+        furnishing.Stars = tier.Stars;
+        furnishing.TakeDoorSounds(container);
         if (!PieceManager.Instance.AddPiece(coffin))
             throw new InvalidOperationException("Jotunn rejected the coffin build piece.");
     }

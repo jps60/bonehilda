@@ -62,6 +62,13 @@ internal sealed class ModelArt
         for (var i = 0; i < indexCount; i++) indices[i] = reader.ReadUInt16();
         Mesh = new Mesh { name = "BH " + name, vertices = points, normals = normals, uv = uv, colors32 = colors, triangles = indices };
         if (weights.Length != 0) Mesh.boneWeights = weights;
+        if (name == "outfit" && reader.BaseStream.Position < reader.BaseStream.Length)
+        {
+            var offsets = new Vector3[vertexCount];
+            var count = reader.ReadInt32();
+            for (var i = 0; i < count; i++) offsets[reader.ReadUInt16()] = Vector(reader);
+            Mesh.AddBlendShapeFrame("Bodice fullness", 100f, offsets, null, null);
+        }
     }
 
     private static Vector3 Vector(BinaryReader reader) =>

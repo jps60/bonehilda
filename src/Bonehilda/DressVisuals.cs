@@ -13,7 +13,11 @@ internal static class DressVisuals
     {
         var outfit = skeleton.Find(Outfit);
         if (outfit && outfit.TryGetComponent<SkinnedMeshRenderer>(out var skin))
-            skin.sharedMaterial = Visuals.Palette(skin.sharedMaterial, Mathf.Clamp(stars, 0, 2));
+        {
+            var tier = Mathf.Clamp(stars, 0, 2);
+            skin.sharedMaterial = Visuals.Palette(skin.sharedMaterial, tier);
+            skin.SetBlendShapeWeight(0, tier * 50f);
+        }
     }
 
     internal static void Build(Transform skeleton)

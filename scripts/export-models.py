@@ -21,11 +21,14 @@ def export_mesh(collection, filename):
     bones = sorted({group.name for obj in objects for group in obj.vertex_groups})
     vertices = {}
     indices = []
+    fit_offsets = {}
     for obj in objects:
         mesh = obj.data
         mesh.calc_loop_triangles()
         normal_matrix = obj.matrix_world.to_3x3().inverted().transposed()
         uv = mesh.uv_layers.active.data
+        keys = obj.original.data.shape_keys
+        fit = keys.key_blocks.get("Bodice fullness") if keys else None
         for triangle in mesh.loop_triangles:
             corners = triangle.loops if obj.matrix_world.is_negative else reversed(triangle.loops)
             for corner in corners:
@@ -43,7 +46,12 @@ def export_mesh(collection, filename):
                     weights.sort(key=lambda pair: -pair[1])
                     weights.extend([(0, 0)] * (4 - len(weights)))
                     record += struct.pack("<4B4f", *(i for i, _ in weights), *(w / total for _, w in weights))
-                indices.append(vertices.setdefault(record, len(vertices)))
+                index = vertices.setdefault(record, len(vertices))
+                indices.append(index)
+                if fit:
+                    delta = fit.data[vertex.index].co - fit.relative_key.data[vertex.index].co
+                    if delta.length_squared > 1e-12:
+                        fit_offsets[index] = unity(obj.matrix_world.to_3x3() @ delta)
 
     with (art / filename).open("wb") as stream:
         stream.write(b"BHM1")
@@ -54,6 +62,10 @@ def export_mesh(collection, filename):
         stream.write(struct.pack("<ii", len(vertices), len(indices)))
         stream.writelines(vertices)
         stream.write(struct.pack(f"<{len(indices)}H", *indices))
+        if fit_offsets:
+            stream.write(struct.pack("<i", len(fit_offsets)))
+            for index, offset in sorted(fit_offsets.items()):
+                stream.write(struct.pack("<H3f", index, *offset))
     print(f"{filename}: {len(vertices)} vertices, {len(indices)//3} triangles, {len(bones)} joints")
 
 
@@ -61,11 +73,12 @@ for rig in bpy.data.armatures:
     rig.pose_position = "REST"
 bpy.data.collections["Star"].hide_viewport = False
 tier_parts = ("Knot", "Bone trim", "Candle", "Flame")
-groups = ["Cabinet", "Door", "Star", "Back hull", "Door hull", "Outfit"]
+groups = ["Cabinet", "Door", "Star", "Back hull", "Door hull", "Outfit", "Feather duster"]
 groups.extend(f"{part} {tier}" for part in tier_parts for tier in range(3))
 for group in groups:
     bpy.data.collections[group].hide_viewport = False
-    bpy.context.window.scene = bpy.data.scenes["Garment fitting"] if group == "Outfit" else scene
+    bpy.context.window.scene = {"Outfit": bpy.data.scenes["Garment fitting"],
+                                "Feather duster": bpy.data.scenes["Feather duster workshop"]}.get(group, scene)
     bpy.context.view_layer.update()
     export_mesh(bpy.data.collections[group], group.lower().replace(" ", "-") + ".bhm")
 

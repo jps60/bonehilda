@@ -19,9 +19,18 @@ public sealed class Coffin : MonoBehaviour
     private float nextServerQuery;
     private Transform door = null!;
     private float doorAngle;
-    private long soundedEntrance;
+    [SerializeField] private EffectList openSound = new EffectList();
+    [SerializeField] private EffectList latchSound = new EffectList();
+    internal void TakeDoorSounds(Container chest)
+    {
+        openSound = chest.m_openEffects;
+        latchSound = chest.m_closeEffects;
+        chest.m_openEffects = new EffectList();
+        chest.m_closeEffects = new EffectList();
+    }
     internal int Level => Mathf.Clamp(Stars, 0, 2) + 1;
-    internal Vector3 ExitPosition => transform.position + transform.forward * 1.7f;
+    internal Vector3 ApproachPosition => transform.position + transform.forward * 1.7f;
+    internal Vector3 ExitPosition => transform.position + transform.forward * (2.9f * CoffinVisuals.Size(Stars));
     internal Vector3 InteriorPosition => transform.position + transform.forward * 0.04f + Vector3.up * 0.18f;
     internal bool DoorOpen => doorAngle < -95f;
 
@@ -37,7 +46,12 @@ public sealed class Coffin : MonoBehaviour
 
     private void Update()
     {
+        CheckMaid();
         AnimateDoor();
+    }
+
+    private void CheckMaid()
+    {
         if (Time.time < nextCheck || !View || !View.IsValid() || !View.IsOwner() || !Piece.IsPlacedByPlayer()) return;
         nextCheck = Time.time + 0.25f;
         FitInventory();
@@ -46,7 +60,7 @@ public sealed class Coffin : MonoBehaviour
         if (data.GetBool(DismissedKey))
         {
             // Keep her visible inside until the door has actually closed.
-            if (id != ZDOID.None && Mathf.Abs(doorAngle) < 2f && !Chest.IsInUse())
+            if (id != ZDOID.None && doorAngle == 0f && !Chest.IsInUse())
             {
                 var stored = ZNetScene.instance.FindInstance(id);
                 if (stored && stored.TryGetComponent<Maid>(out var storedMaid))
@@ -74,13 +88,7 @@ public sealed class Coffin : MonoBehaviour
         }
         if (ZNet.instance.GetTime().Ticks < data.GetLong(RespawnKey)) return;
         var now = ZNet.instance.GetTime();
-        var entrance = data.GetLong(EntranceKey);
-        if (entrance == 0 || (now.Ticks - entrance) / (double)TimeSpan.TicksPerSecond > 8)
-        {
-            data.Set(EntranceKey, now.Ticks);
-            return; // Open the cabinet before materializing her inside it.
-        }
-        if ((now.Ticks - entrance) / (double)TimeSpan.TicksPerSecond < 0.9) return;
+        data.Set(EntranceKey, now.Ticks);
         var prefab = ZNetScene.instance.GetPrefab(Plugin.MaidPrefab);
         if (!prefab) return;
         // Leave the uncompressed first pose clear of the rear panel.
@@ -113,13 +121,11 @@ public sealed class Coffin : MonoBehaviour
         var exiting = maid && maid!.GetComponent<ZNetView>().IsValid() && maid.GetComponent<ZNetView>().GetZDO().GetBool(Maid.ExitingKey);
         var opening = data.GetInt(ZDOVars.s_inUse) == 1 || Chest.IsInUse()
             || ZNet.instance.GetTime().Ticks < data.GetLong("BH_doorUntil") || (start != 0 && (elapsed < 5 || exiting));
-        if (start != 0 && start != soundedEntrance)
-        {
-            soundedEntrance = start;
-            if (View.IsOwner() && elapsed < 2) WorkSounds.Play(Chest.m_openEffects, transform.position, transform.rotation);
-        }
+        var previous = doorAngle;
         doorAngle = Mathf.MoveTowards(doorAngle, opening ? -110f : 0f, Time.deltaTime * 160f);
         door.localRotation = Quaternion.Euler(0, doorAngle, 0);
+        if (View.IsOwner() && previous == 0f && doorAngle < 0f) WorkSounds.Play(openSound, door.position, door.rotation);
+        if (View.IsOwner() && previous < 0f && doorAngle == 0f) WorkSounds.Play(latchSound, door.position, door.rotation);
     }
 
     internal void HoldDoor()
@@ -140,7 +146,6 @@ public sealed class Coffin : MonoBehaviour
         data.Set(EntranceKey, 0L);
         data.Set("BH_doorUntil", 0L);
         maid.View.GetZDO().Set("BH_stowing", true);
-        WorkSounds.Play(Chest.m_closeEffects, transform.position, transform.rotation);
         return true;
     }
 
