@@ -41,11 +41,30 @@ internal sealed class Housekeeping
         var point = target.transform.TransformPoint(localPoint);
         var deltaToSurface = point - reference;
         deltaToSurface.y = 0;
+        var distanceToEdge = deltaToSurface.magnitude;
+        // Leave room in front of the apron for the wooden grip throughout the sweep.
+        var spacing = Mathf.Lerp(.83f, .96f, Mathf.InverseLerp(.45f, 1.05f, point.y - maid.transform.position.y))
+            * (1f + .06f * home.Stars);
+        if (!sweeping && distanceToEdge < spacing - .09f)
+        {
+            var away = distanceToEdge > .01f ? -deltaToSurface.normalized : -maid.transform.forward;
+            var step = maid.transform.position + away * (spacing - distanceToEdge + .15f);
+            var solids = LayerMask.GetMask("piece", "terrain", "static_solid");
+            if (!Physics.Raycast(step + Vector3.up * .35f, Vector3.down, .75f, solids)
+                || Physics.SphereCast(maid.transform.position + Vector3.up * .55f, .25f, away,
+                    out _, spacing - distanceToEdge, solids))
+            {
+                Cancel(maid.View);
+                return false;
+            }
+            ai.MoveTowards(away, false);
+            return true;
+        }
         var reachable = maid.CanReach(target, point);
-        if (deltaToSurface.magnitude > .72f || !reachable)
+        if (distanceToEdge > spacing || !reachable)
         {
             if (sweeping) { Cancel(maid.View); return false; }
-            if (reachable && deltaToSurface.magnitude < 1.25f) ai.MoveTowards(deltaToSurface, false);
+            if (reachable && distanceToEdge < 1.25f) ai.MoveTowards(deltaToSurface, false);
             else ai.MoveTo(delta, point, .5f, false);
             return true;
         }
