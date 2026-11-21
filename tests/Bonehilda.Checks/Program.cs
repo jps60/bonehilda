@@ -176,6 +176,15 @@ static bool NewRepairResetsRetries()
 
 static IEnumerable<(string Name, bool Passed)> IdleChecks()
 {
+    yield return ("performed activities respect the configured delay", IdleTiming.Delay(15, true, 0) == 15 && IdleTiming.Delay(15, true, 1) == 22.5f);
+    yield return ("failed approaches retry quickly even with a long configured delay", IdleTiming.Delay(90, false, 0) == 3 && IdleTiming.Delay(90, false, 1) == 4.5f);
+    var now = 100L * TimeSpan.TicksPerSecond;
+    var oldPending = IdleTiming.Next(now, 90, true, 1);
+    var shortened = IdleTiming.ClampPending(now, oldPending, 15);
+    yield return ("lowering the interval caps an old saved cooldown", shortened == now + (long)(22.5 * TimeSpan.TicksPerSecond));
+    yield return ("an elapsed cooldown stays ready", IdleTiming.ClampPending(now, now - 1, 15) < now);
+    yield return ("idle polling does not keep postponing a pending visit", IdleTiming.ClampPending(now + TimeSpan.TicksPerSecond, shortened, 15) == shortened);
+    yield return ("failed approach cooldown expires before a full activity delay", IdleTiming.Next(now, 15, false, 1) < IdleTiming.Next(now, 15, true, 0));
     var dresses = new[] { "ArmorDress10", "ArmorDress1", "ArmorDress6" };
     for (var tier = 0; tier < 3; tier++)
     {

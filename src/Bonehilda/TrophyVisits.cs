@@ -14,6 +14,7 @@ internal sealed class TrophyVisits
     private Vector3 standingPoint;
     private float deadline;
     private bool reacting;
+    internal bool Performed { get; private set; }
 
     internal static void Configure()
     {
@@ -30,6 +31,7 @@ internal sealed class TrophyVisits
     internal bool TryBegin(Maid maid, Coffin home, System.Collections.Generic.List<Piece> pieces)
     {
         target = null;
+        Performed = false;
         var best = float.PositiveInfinity;
         var previous = maid.View.GetZDO().GetZDOID("BH_lastTrophy");
         foreach (var piece in pieces)
@@ -81,6 +83,7 @@ internal sealed class TrophyVisits
             maid.GetComponent<WorkAnimations>().Emote(choices[Random.Range(0, choices.Length)], 5f);
             maid.View.GetZDO().Set("BH_lastTrophy", target.GetComponent<ZNetView>().GetZDO().m_uid);
             reacting = true;
+            Performed = true;
             deadline = Time.time + 5f;
         }
         return true;

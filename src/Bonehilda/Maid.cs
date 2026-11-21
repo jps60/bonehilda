@@ -196,6 +196,7 @@ public sealed class Maid : MonoBehaviour
             idle.Cancel(this);
             wasOwner = true;
         }
+        ClearCombatState();
         EnsureDefaultName();
         LoadCargo();
         var homeId = View.GetZDO().GetZDOID(HomeKey);
@@ -421,6 +422,24 @@ public sealed class Maid : MonoBehaviour
     {
         phase = value;
         phaseEnds = Time.time + seconds;
+    }
+
+    private void ClearCombatState()
+    {
+        if (ai.IsAlerted() || View.GetZDO().GetBool("alert"))
+        {
+            ai.SetAlerted(false);
+            // BaseAI's skipped update can leave the network flag different
+            // from its local field after a save/load or ownership handoff.
+            View.GetZDO().Set("alert", false);
+            // Alerted RandomMovement runs and immediately picks another route
+            // on arrival. Discard that route when recovering an existing maid.
+            ai.ResetRandomMovement();
+            ai.StopMoving();
+        }
+        ai.m_targetCreature = null!;
+        ai.m_targetStatic = null!;
+        if (ai.HaveTarget()) ai.SetTargetInfo(ZDOID.None);
     }
 
     private void UpdateWork(Coffin home)

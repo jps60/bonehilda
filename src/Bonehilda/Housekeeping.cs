@@ -11,15 +11,19 @@ internal sealed class Housekeeping
     private Vector3 localPoint;
     private float deadline;
     private bool sweeping;
+    private bool attempted;
+    internal bool Performed { get; private set; }
 
     internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces)
     {
         target = null;
+        attempted = false;
+        Performed = false;
         var distance = float.MaxValue;
         foreach (var piece in pieces)
         {
-            if (!piece || piece == previous || !Eligible(piece, home, ai.m_randomMoveRange)) continue;
-            var d = (piece.transform.position - maid.transform.position).sqrMagnitude;
+            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange)) continue;
+            var d = (piece.transform.position - maid.transform.position).sqrMagnitude + (piece == previous ? 10000f : 0f);
             if (d >= distance) continue;
             if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
             target = piece;
@@ -33,6 +37,7 @@ internal sealed class Housekeeping
 
     internal bool Tick(Maid maid, MonsterAI ai, Coffin home, float delta)
     {
+        attempted = true;
         var data = maid.View.GetZDO();
         if (target == null || Time.time >= deadline || !Eligible(target, home, ai.m_randomMoveRange))
         {
@@ -87,6 +92,7 @@ internal sealed class Housekeeping
             DustingRoutine.Choose(data);
             data.Set(FeatherDuster.StartKey, ZNet.instance.GetTime().Ticks);
             sweeping = true;
+            Performed = true;
             deadline = Time.time + FeatherDuster.Seconds;
         }
         return true;
@@ -133,7 +139,7 @@ internal sealed class Housekeeping
     {
         if (view && view.IsValid() && view.IsOwner() && view.GetZDO().GetLong(FeatherDuster.StartKey) != 0)
             view.GetZDO().Set(FeatherDuster.StartKey, 0L);
-        if (target != null)
+        if (target != null && attempted)
         {
             previous = target;
         }

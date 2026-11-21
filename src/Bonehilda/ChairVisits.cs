@@ -10,10 +10,12 @@ internal sealed class ChairVisits
     private float deadline;
     private float nextRoll;
     private bool sitting;
+    internal bool Performed { get; private set; }
 
     internal bool TryBegin(Maid maid, Coffin home, List<Piece> pieces)
     {
         target = null; sitting = false;
+        Performed = false;
         var best = float.PositiveInfinity;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
         foreach (var piece in pieces)
@@ -59,6 +61,7 @@ internal sealed class ChairVisits
         ai.StopMoving(); maid.StopNavigation();
         if (!seat.Sit(target)) return false;
         sitting = true;
+        Performed = true;
         nextRoll = Time.time + Plugin.SittingCheckInterval.Value;
         return true;
     }

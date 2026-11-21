@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.6";
+    public const string Version = "0.4.7";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -65,7 +65,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         WanderRadius = Setting("Maid", "WanderRadius", 5f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
-        DustingInterval = Setting("Maid", "DustingInterval", 90f, "Minimum seconds between idle activity visits (dusting, trophies, or sitting); varies up to 50% longer and persists through dismissal. Real jobs take priority.", 15f, 600f);
+        DustingInterval = Setting("Maid", "DustingInterval", 15f, "Seconds between performed idle activities (dusting, trophies, or sitting); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 5f, 600f);
         StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
         TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
@@ -178,6 +178,17 @@ public sealed class Plugin : BaseUnityPlugin
 internal static class MaidAiPatch
 {
     private static bool Prefix(MonsterAI __instance) => !__instance.GetComponent<Maid>();
+}
+
+// Damage/projectile callbacks still run outside MonsterAI.UpdateAI. A worker
+// must never enter an alert state that the replaced combat loop cannot clear.
+[HarmonyPatch(typeof(MonsterAI), nameof(MonsterAI.SetAlerted))]
+internal static class MaidPassivePatch
+{
+    private static void Prefix(MonsterAI __instance, ref bool __0)
+    {
+        if (__instance.GetComponent<Maid>()) __0 = false;
+    }
 }
 
 [HarmonyPatch(typeof(Tameable), "UpdateSummon")]

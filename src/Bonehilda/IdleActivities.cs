@@ -18,8 +18,10 @@ internal sealed class IdleActivities
         var now = ZNet.instance.GetTime().Ticks;
         if (active == 0)
         {
-            var next = data.GetLong(NextVisitKey);
-            if (next == 0) { Schedule(data); return false; }
+            var pending = data.GetLong(NextVisitKey);
+            if (pending == 0) { Schedule(data, false); return false; }
+            var next = IdleTiming.ClampPending(now, pending, Plugin.DustingInterval.Value);
+            if (next != pending) data.Set(NextVisitKey, next);
             if (now < next) return false;
             var available = dust.TryBegin(maid, ai, home, pieces) ? IdleDeck.Dust : 0;
             if (Plugin.TrophyReactions.Value && trophy.TryBegin(maid, home, pieces)) available |= IdleDeck.Trophy;
@@ -28,11 +30,10 @@ internal sealed class IdleActivities
             active = IdleDeck.Choose(available, ref remaining, data.GetInt("BH_lastIdle"), Random.value);
             data.Set("BH_idleDeck", remaining);
             if (active != 0) data.Set("BH_lastIdle", active);
-            Schedule(data);
             if (active != IdleDeck.Dust) dust.Cancel(maid.View);
             if (active != IdleDeck.Trophy) trophy.Cancel(maid);
             if (active != IdleDeck.Sit) chair.Cancel(maid);
-            if (active == 0) return false;
+            if (active == 0) { Schedule(data, false); return false; }
         }
         var running = active == IdleDeck.Dust ? dust.Tick(maid, ai, home, delta)
             : active == IdleDeck.Trophy ? Plugin.TrophyReactions.Value && trophy.Tick(maid, ai, home, delta)
@@ -44,20 +45,23 @@ internal sealed class IdleActivities
 
     internal void Cancel(Maid maid)
     {
+        var performed = active == IdleDeck.Dust ? dust.Performed
+            : active == IdleDeck.Trophy ? trophy.Performed
+            : active == IdleDeck.Sit && chair.Performed;
         dust.Cancel(maid.View);
         trophy.Cancel(maid);
         chair.Cancel(maid);
         maid.GetComponent<WorkAnimations>().StopEmote();
         if (active != 0)
         {
-            if (maid.View && maid.View.IsValid() && maid.View.IsOwner()) Schedule(maid.View.GetZDO());
+            if (maid.View && maid.View.IsValid() && maid.View.IsOwner()) Schedule(maid.View.GetZDO(), performed);
             maid.StopNavigation();
         }
         active = 0;
     }
 
-    private static void Schedule(ZDO data) => data.Set(NextVisitKey, ZNet.instance.GetTime().Ticks
-        + (long)(Random.Range(Plugin.DustingInterval.Value, Plugin.DustingInterval.Value * 1.5f) * System.TimeSpan.TicksPerSecond));
+    private static void Schedule(ZDO data, bool performed) => data.Set(NextVisitKey,
+        IdleTiming.Next(ZNet.instance.GetTime().Ticks, Plugin.DustingInterval.Value, performed, Random.value));
 
     internal static bool Floor(Vector3 point, float referenceY, out Vector3 floor, float depth = 2.5f)
     {

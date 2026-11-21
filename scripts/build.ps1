@@ -30,7 +30,7 @@ try {
     $manifest = [ordered]@{
         name = 'Bonehilda'
         version_number = $version
-        website_url = ''
+        website_url = 'https://github.com/jps60/bonehilda'
         description = "Makin' Magic: three coffin tiers summon skeletal maids with 2/4/8 supply slots, animated repairs, machine supply, and free will. Dismiss to rest; open the coffin to recall."
         dependencies = @('denikson-BepInExPack_Valheim-5.4.2360', 'ValheimModding-Jotunn-2.30.2')
     }
