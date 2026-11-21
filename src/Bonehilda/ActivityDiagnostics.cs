@@ -19,12 +19,6 @@ internal sealed class MaidActivity
 
 internal sealed class ActivityDiagnostics : MonoBehaviour
 {
-    [Serializable]
-    private sealed class Snapshot
-    {
-        public string version = Plugin.Version, utc = "";
-        public MaidActivity[] maids = Array.Empty<MaidActivity>();
-    }
     private float nextCapture;
     internal static string SnapshotPath => Path.Combine(Paths.ConfigPath, "Bonehilda.activity.json");
     private static string HistoryPath => Path.Combine(Paths.ConfigPath, "Bonehilda.activity.log");
@@ -39,12 +33,13 @@ internal sealed class ActivityDiagnostics : MonoBehaviour
 
     internal static string Capture()
     {
-        var snapshot = new Snapshot { utc = DateTime.UtcNow.ToString("o"),
-            maids = Maid.Loaded.Where(m => m && m.View && m.View.IsValid()).Select(m => m.ReadActivity()).OrderBy(m => m.id).ToArray() };
-        File.WriteAllText(SnapshotPath, JsonUtility.ToJson(snapshot, true));
+        var utc = DateTime.UtcNow.ToString("o");
+        var maids = Maid.Loaded.Where(m => m && m.View && m.View.IsValid()).Select(m => m.ReadActivity()).OrderBy(m => m.id).ToArray();
+        var records = maids.Select(m => JsonUtility.ToJson(m)).ToArray();
+        File.WriteAllText(SnapshotPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records, pretty: true));
         if (File.Exists(HistoryPath) && new FileInfo(HistoryPath).Length > 2 * 1024 * 1024) File.WriteAllText(HistoryPath, "");
-        File.AppendAllText(HistoryPath, JsonUtility.ToJson(snapshot) + Environment.NewLine);
-        return string.Join("\n", snapshot.maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; target={m.target}; distance={m.targetDistance:F1}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}"))
+        File.AppendAllText(HistoryPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records) + Environment.NewLine);
+        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; claim={m.reservation}"))
             + "\nSnapshot: " + SnapshotPath;
     }
 }

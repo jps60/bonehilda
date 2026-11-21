@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.10.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
+**Version 0.4.11.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
 
 ## Playing
 
@@ -116,7 +116,7 @@ Jötunn synchronizes these admin-only settings from the server. Edit the generat
 | Debugging | ActivityLogging | false | Local activity snapshot/history every two seconds; not synchronized |
 | Maid | RespawnDelay | 60 | 5–3600 seconds after the server detects a missing maid |
 
-For live diagnosis, enable `[Debugging] ActivityLogging = true`. The local profile writes `BepInEx/config/Bonehilda.activity.json` and a bounded `Bonehilda.activity.log`. These contain each loaded maid's job, target, distance, reach/station eligibility, cargo, path nodes, recovery count, idle activity, door stage, and task reservation. The console command `bonehilda_status` also captures a snapshot immediately. Non-owner clients cannot inspect another peer's private job queue; inspect the owning client or server. Loading this feature requires restarting from an older mod version.
+For live diagnosis, enable `[Debugging] ActivityLogging = true`. The local profile writes `BepInEx/config/Bonehilda.activity.json` and a bounded `Bonehilda.activity.log`. Version 0.4.11 fixes an export bug where the file contained a timestamp but omitted the maid array; empty areas now explicitly contain `maids: []`. These contain each loaded maid's job, target, distance, reach/station eligibility, cargo, path nodes, recovery count, idle activity, door stage, and task reservation. The console command `bonehilda_status` also captures a snapshot immediately. Non-owner clients cannot inspect another peer's private job queue; inspect the owning client or server. Loading this feature requires restarting from an older mod version.
 
 ## Persistence and permissions
 
@@ -136,7 +136,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.10.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.11.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 Every requested build is delivered by committing and pushing the completed source and publishing the matching ZIP on GitHub Releases. After pushing, `scripts/publish-release.ps1` derives the version from the project, uploads the ZIP, and verifies its public download by SHA-256. It uses the existing Git Credential Manager login and accepts an optional `-NotesPath` file for release notes.
 

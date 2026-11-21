@@ -98,9 +98,36 @@ var checks = new (string Name, bool Passed)[]
 };
 checks = checks.Concat(IdleChecks()).ToArray();
 checks = checks.Concat(ReservationChecks()).ToArray();
+checks = checks.Concat(SnapshotChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> SnapshotChecks()
+{
+    var records = new[] {
+        "{\"id\":\"maid0\",\"targetId\":\"roof1\",\"position\":{\"x\":1,\"y\":2,\"z\":3},\"inReach\":false}",
+        "{\"id\":\"maid1\",\"targetId\":\"roof2\",\"reservation\":\"repair roof2 (15s)\"}",
+        "{\"id\":\"maid2\",\"targetId\":\"stair\",\"cargo\":\"Coal x1\"}"
+    };
+    foreach (var pretty in new[] { false, true })
+    {
+        var json = ActivitySnapshotJson.Encode("0.4.11", "2026-11-21T22:29:45Z", records, pretty);
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var root = document.RootElement;
+        var maids = root.GetProperty("maids");
+        yield return ($"complete snapshot exports all three maids (pretty={pretty})", maids.GetArrayLength() == 3);
+        yield return ($"snapshot retains distinct roof target IDs (pretty={pretty})", maids[0].GetProperty("targetId").GetString() != maids[1].GetProperty("targetId").GetString());
+        yield return ($"snapshot retains movement and reach diagnostics (pretty={pretty})", maids[0].GetProperty("position").GetProperty("x").GetInt32() == 1 && !maids[0].GetProperty("inReach").GetBoolean());
+        yield return ($"snapshot retains reservations and cargo (pretty={pretty})", maids[1].GetProperty("reservation").GetString() == "repair roof2 (15s)" && maids[2].GetProperty("cargo").GetString() == "Coal x1");
+        yield return ($"snapshot retains version and timestamp (pretty={pretty})", root.GetProperty("version").GetString() == "0.4.11" && root.GetProperty("utc").GetString() == "2026-11-21T22:29:45Z");
+        if (!pretty) yield return ("history snapshots occupy a single JSONL line", !json.Contains('\n') && !json.Contains('\r'));
+    }
+    using var empty = System.Text.Json.JsonDocument.Parse(ActivitySnapshotJson.Encode("test", "now", Array.Empty<string>()));
+    yield return ("no loaded maids produces an explicit empty array", empty.RootElement.GetProperty("maids").GetArrayLength() == 0);
+    using var escaped = System.Text.Json.JsonDocument.Parse(ActivitySnapshotJson.Encode("a\"b\\c\n\t", "now", records));
+    yield return ("snapshot metadata is safely JSON escaped", escaped.RootElement.GetProperty("version").GetString() == "a\"b\\c\n\t");
+}
 
 static IEnumerable<(string Name, bool Passed)> ReservationChecks()
 {
