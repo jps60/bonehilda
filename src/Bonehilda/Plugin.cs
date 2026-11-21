@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
 using HarmonyLib;
@@ -17,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.1";
+    public const string Version = "0.4.4";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -32,6 +33,14 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> SupplyMachines = null!;
     internal static ConfigEntry<bool> Wander = null!;
     internal static ConfigEntry<float> WanderRadius = null!;
+    internal static ConfigEntry<float> WanderInterval = null!;
+    internal static ConfigEntry<float> DustingInterval = null!;
+    internal static ConfigEntry<float> StuckTime = null!;
+    internal static ConfigEntry<bool> TrophyReactions = null!;
+    internal static ConfigEntry<float> TrophyDistance = null!;
+    internal static ConfigEntry<bool> IdleSitting = null!;
+    internal static ConfigEntry<float> SittingCheckInterval = null!;
+    internal static ConfigEntry<float> SittingContinueChance = null!;
     internal static HashSet<string> LegacySkeletonNames = new HashSet<string>(StringComparer.Ordinal);
     private Harmony harmony = null!;
     private bool registered;
@@ -53,7 +62,17 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         Wander = Config.Bind("Maid", "IdleWander", true, new ConfigDescription("Free will enabled: wander near the coffin when there are no chores.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        WanderRadius = Setting("Maid", "WanderRadius", 10f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
+        WanderRadius = Setting("Maid", "WanderRadius", 5f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
+        WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
+        DustingInterval = Setting("Maid", "DustingInterval", 90f, "Minimum seconds between idle activity visits (dusting, trophies, or sitting); varies up to 50% longer and persists through dismissal. Real jobs take priority.", 15f, 600f);
+        StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
+        TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        TrophyDistance = Setting("Maid", "TrophyInteractionDistance", 1.6f, "Standing distance in front of a trophy's visible surface, in meters.", 1f, 2.5f);
+        IdleSitting = Config.Bind("Maid", "IdleSitting", true, new ConfigDescription("Include nearby unoccupied chairs in the idle activity deck. Work and dismissal interrupt sitting.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        SittingCheckInterval = Setting("Maid", "SittingCheckInterval", 10f, "Seconds between rolls to leave an idle chair.", 5f, 120f);
+        SittingContinueChance = Setting("Maid", "SittingContinueChance", .6f, "Probability of continuing to sit at each check. 0.6 means 60% stay, 40% get up.", 0f, .95f);
         harmony = new Harmony(Guid);
         harmony.PatchAll();
         PrefabManager.OnVanillaPrefabsAvailable += Register;
@@ -69,6 +88,7 @@ public sealed class Plugin : BaseUnityPlugin
         try
         {
             WorkSounds.Configure();
+            TrophyVisits.Configure();
             var maid = new CustomCreature(MaidPrefab, "Skeleton_Friendly", new CreatureConfig { Name = "Bonehilda" });
             var prefab = maid.Prefab;
             var character = prefab.GetComponent<Humanoid>();
@@ -84,6 +104,7 @@ public sealed class Plugin : BaseUnityPlugin
             // Apply after binding the garment so both the body and cloth grow together.
             prefab.GetComponentInChildren<Animator>(true).transform.localScale *= 1.04f;
             prefab.AddComponent<FeatherDuster>();
+            prefab.AddComponent<MaidSeating>();
             var drops = prefab.GetComponent<CharacterDrop>();
             if (drops) drops.m_drops.Clear();
             var tame = prefab.GetComponent<Tameable>() ?? prefab.AddComponent<Tameable>();
@@ -98,7 +119,7 @@ public sealed class Plugin : BaseUnityPlugin
             tame.m_unsummonOnOwnerLogoutSeconds = 0f;
             var ai = prefab.GetComponent<MonsterAI>();
             ai.m_despawnInDay = false;
-            ai.m_randomMoveInterval = 2f;
+            ai.m_randomMoveInterval = WanderInterval.Value;
             ai.m_consumeItems.Clear();
             prefab.AddComponent<Maid>();
             if (!CreatureManager.Instance.AddCreature(maid))
@@ -116,12 +137,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void RegisterCoffin(CoffinTier tier)
     {
-        var requirements = new List<RequirementConfig>
-        {
-            new RequirementConfig("Wood", tier.Wood, 0, true),
-            new RequirementConfig("BoneFragments", tier.Bones, 0, true)
-        };
-        if (tier.Bronze > 0) requirements.Add(new RequirementConfig("Bronze", tier.Bronze, 0, true));
+        var requirements = tier.Recipe.Select(r => new RequirementConfig(r.Item, r.Amount, 0, true)).ToArray();
         var coffin = new CustomPiece(tier.Prefab, "piece_chest_wood", new PieceConfig
         {
             Name = tier.Name,
@@ -130,7 +146,7 @@ public sealed class Plugin : BaseUnityPlugin
             Category = "Furniture",
             Usage = new[] { "Furniture", "Storage" },
             CraftingStation = "piece_workbench",
-            Requirements = requirements.ToArray()
+            Requirements = requirements
         });
         var container = coffin.PiecePrefab.GetComponent<Container>();
         container.m_name = tier.Name;

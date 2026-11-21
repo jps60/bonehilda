@@ -6,6 +6,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Bonehilda/CoffinRecipes.cs" Link="CoffinRecipes.cs" />
+    <Compile Include="../../src/Bonehilda/IdleDeck.cs" Link="IdleDeck.cs" />
+    <Compile Include="../../src/Bonehilda/TrophyEmotes.cs" Link="TrophyEmotes.cs" />
     <Compile Include="../../src/Bonehilda/MaintenancePolicy.cs" Link="MaintenancePolicy.cs" />
+    <Compile Include="../../src/Bonehilda/NavigationProgress.cs" Link="NavigationProgress.cs" />
   </ItemGroup>
 </Project>

@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.1.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
+**Version 0.4.4.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
 
 ## Playing
 
@@ -12,9 +12,11 @@ Build a coffin with the hammer under **Furniture** or **Storage**, near a workbe
 
 | Hammer piece | Bonehilda | Supply chest | Recipe | Prefab |
 | --- | --- | --- | --- | --- |
-| Bonehilda's coffin (0 stars) | 0 stars; red dress | 2 slots | 10 Wood, 5 Bone Fragments | `BH_Coffin_0Star` |
-| Bonehilda's coffin (1 star) | 1 star; black dress | 4 slots | 20 Wood, 10 Bone Fragments, 1 Bronze | `BH_Coffin_1Star` |
-| Bonehilda's coffin (2 stars) | 2 stars; blush floral dress | 8 slots | 20 Wood, 10 Bone Fragments, 2 Bronze | `BH_Coffin` |
+| Bonehilda's coffin (0 stars) | 0 stars; red dress | 2 slots | 20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, 1 Simple Undyed Dress | `BH_Coffin_0Star` |
+| Bonehilda's coffin (1 star) | 1 star; black dress | 4 slots | 25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, 1 Plain Brown Dress | `BH_Coffin_1Star` |
+| Bonehilda's coffin (2 stars) | 2 stars; blush floral dress | 8 slots | 30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, 1 Blue Dress with Beads | `BH_Coffin` |
+
+Each tier consumes one dress from Hildir: undyed, plain, then beaded. Ectoplasm supplies the ghostly spark; no refined eitr or wisps are required. Existing coffins keep their tier and inventory when recipes change.
 
 Each coffin keeps a shallow side profile. The zero-star wooden case is 67 cm deep and the larger tiers scale with their maids. Inside the doorway, the skeleton, dress, and hammer ease together into a shallower pose and regain their full depth on exit. The six-sided coffin has a flat crown, broad shoulders, a tapered foot, and a withered-bone frame around a quilted lining and a hinged timber door. The doors carry linked lozenges, a three-lobed knot, and a four-loop weave in ascending tier order. Crooked, weathered bone rails frame both the front and the back. The recessed candles progress from a beeswax stub in iron to an ivory pillar in bronze and a twisted plum taper in a petalled cup. Each flame bends at the wick and its recessed light flickers with it. The hammer icons are renders of the three finished coffins. Leave clear space in front for Bonehilda to enter and return.
 
@@ -42,16 +44,40 @@ Each maid supplies **at most one item per configurable interval**, default **1 s
 
 Modded pieces using these same consumer components and accepted-item lists can also work. This is not an adapter for every arbitrary mod's custom machine.
 
-Her work radius defaults to **30 meters from the coffin**, including vertical distance. She uses normal pathfinding and needs access to the coffin and each job. Closed doors, enclosed spaces, and high roofs can prevent access. Unreachable jobs time out. When idle, she walks within **10 meters of the coffin** and takes a feather duster from her belt to brush nearby player-built workbenches, closed chests, tables, chairs, and item stands. Dusting is cosmetic. She varies her routine between chores. She can sweep sideways before reaching forward, reach and retract before a quicker sideways sweep, or make two short wipes followed by a broad finishing pass. She uses all three before refilling the selection and avoids immediate repeats. Narrow furniture shortens the stroke. She bends her knees to reach lower furniture. The feathers flex on both passes and stir up occasional puffs of dust. Between chores she resumes walking, even when there is no furniture to dust. Repairs, supply runs, and dismissal interrupt her. She is a passive worker, can take damage, and returns after death with a configurable delay.
+Her work radius defaults to **30 meters from the coffin**, including vertical distance. She uses normal pathfinding and needs access to the coffin and each job. Closed doors, enclosed spaces, and high roofs can prevent access. Unreachable jobs time out. After **6 seconds** of attempted navigation without moving 25 cm, she checks safe back-off points about 2 meters away, clears the cached path, and retries from another angle. Recovery applies to coffin entry/exit, supply and repair destinations, and dusting. It uses walking and collision checks, including floor support; it does not teleport her or move supplies. A permanently enclosed or badly buried coffin can still be unreachable. When idle, she walks within **5 meters of the coffin**, choosing destinations **12–18 seconds apart**, and occasionally takes a feather duster from her belt to brush nearby player-built workbenches, closed chests, tables, chairs, and item stands. Dusting is cosmetic and shares the **90–135 second idle activity cooldown** described below. Its cooldown survives save/load and dismissal, and starts with a delay instead of an immediate chore. She varies her routine between chores. She can sweep sideways before reaching forward, reach and retract before a quicker sideways sweep, or make two short wipes followed by a broad finishing pass. She uses all three before refilling the selection and avoids immediate repeats. Narrow furniture shortens the stroke. She bends her knees to reach lower furniture. The feathers flex on both passes and stir up occasional puffs of dust. Between chores she resumes walking, even when there is no furniture to dust. Repairs, supply runs, and dismissal interrupt her. She is a passive worker, can take damage, and returns after death with a configurable delay.
+
+Idle activities share a shuffled deck of dusting, trophy visits, and sitting. Eligible activities take turns before the deck refills, with no immediate repeat when alternatives exist. The shared `DustingInterval` gives **90–135 seconds between activities**, measured after an activity ends or is interrupted. Trophy visits use the **full work radius** (30 m by default), while dusting, sitting, and normal wandering stay within `WanderRadius` (5 m). She stands about **1.6 m in front of the trophy's visible surface**, faces it, and performs one native player emote. Only permitted, player-built displays qualify; blocked or inaccessible displays are skipped.
+
+| Mounted trophy | Possible player emotes |
+| --- | --- |
+| Eikthyr | Bow, cheer |
+| The Elder | Bow, headbang |
+| Bonemass | Cower, no-no-no |
+| Moder | Bow, blow a kiss |
+| Yagluth | Challenge, laugh |
+| The Queen | Cower, challenge |
+| Fader | Roar, flex |
+| Brenna | Headbang, cheer |
+| Geirrhafa | Cower, bow |
+| Zil and Thungr | Challenge, cheer |
+| Other installed bosses with trophy drops | Bow, challenge fallback |
+| Skeleton / rancid remains | Point, wave / point, no-no-no |
+| Ghost / wraith | Wave, bow / cower, point |
+| Draugr / elite draugr | No-no-no, shrug / challenge, shrug |
+| Troll | Laugh, flex |
+
+She occasionally sits in an unoccupied nearby chair using its native seated pose. Every **10 seconds**, she rolls **60% to stay seated / 40% to get up**. Both values are configurable. Repairs, supplies, carried items, and dismissal interrupt her break; normal work scans still run while she sits or admires trophies (within the configured `ScanInterval`, default 5 seconds). Seats are reserved while occupied, released when she stands or dies, and protected by an expiring network lease if she unloads. Ships are excluded. Free will has its limits: the chores still come first.
 
 **Cooking stations, ovens, and obliterators never receive supplies.** Windmills and fermenters are included. She does not tap fermenters, collect production output, fire catapults, decorate item stands, or change ballista targeting filters. Repair supplies are not consumed, and the repair setting still applies to damaged player-built pieces.
 
 New maids are named **Bonehilda**, with no random summoned-skeleton name. Existing random names are migrated where recognized, and player-set names are preserved. Her hover action shows Dismiss while on duty and Recall while off duty or returning; the alternate-use rename action is preserved.
 
+Clothing uses Hildir's native clothing shader with a separate matte material, retaining the authored atlas and mesh. It disables inherited rain/snow sheen, value noise, triplanar mapping, metallic/gloss-map variants, and uses an albedo multiplier of 0.8. The cabinet keeps its own material. These controls are documented in [Jötunn's shader list](https://valheim-modding.github.io/Jotunn/data/prefabs/shader-list.html) and [material keyword list](https://valheim-modding.github.io/Jotunn/data/prefabs/material-list.html); [Unity's shading guidance](https://docs.unity.cn/2019.1/Documentation/Manual/BestPracticeMakingBelievableVisuals5.html) explains the effect of overly bright albedo. This mitigates clothing shimmer; firelight validation remains necessary. Unity also documents [flicker caused by real-time light limits](https://docs.unity.com/en-us/engine/6000.3/manual/lighting-overview/lighting/ts-lights-flicker-disappear), which a material adjustment cannot universally fix. The mod does not change global graphics settings.
+
 ## Installation
 
 1. Install [BepInEx for Valheim](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/) and [Jötunn 2.30.2](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/).
-2. Import `dist/Bonehilda-0.4.1.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
+2. Import `dist/Bonehilda-0.4.4.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
 3. Install the same mod version and dependencies on **every client and the dedicated server**.
 4. Launch once to generate `BepInEx/config/com.bonehilda.valheim.cfg`.
 
@@ -74,7 +100,15 @@ Jötunn synchronizes these admin-only settings from the server. Edit the generat
 | Work | RefuelStructures | true | Enable fuel delivery |
 | Work | SupplyMachines | true | Enable machine inputs, fuel, and ammunition |
 | Maid | IdleWander | true | Enable free will when there are no chores |
-| Maid | WanderRadius | 10 | 2–50 meters, clamped within the work radius |
+| Maid | WanderRadius | 5 | 2–50 meters, clamped within the work radius |
+| Maid | WanderInterval | 12 | 5–120 seconds between idle destinations; randomized up to 50% longer |
+| Maid | DustingInterval | 90 | 15–600 seconds between idle activities; randomized up to 50% longer |
+| Maid | TrophyReactions | true | Include mounted trophy reactions within the full work radius |
+| Maid | TrophyInteractionDistance | 1.6 | 1–2.5 meters in front of the visible trophy surface |
+| Maid | IdleSitting | true | Include unoccupied stationary chairs within the idle radius |
+| Maid | SittingCheckInterval | 10 | 5–120 seconds between rolls to get up |
+| Maid | SittingContinueChance | 0.6 | 0–0.95 probability of continuing to sit each roll |
+| Work | NavigationStuckTime | 6 | 2–30 seconds of attempted movement without progress before retrying |
 | Maid | RespawnDelay | 60 | 5–3600 seconds after the server detects a missing maid |
 
 ## Persistence and permissions
@@ -95,7 +129,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.1.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.4.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 ```powershell
 dotnet build src/Bonehilda/Bonehilda.csproj -c Release
@@ -108,7 +142,7 @@ To edit the models, open `assets/models/Bonehilda.blend`. The **Coffin workshop*
 blender -b assets/models/Bonehilda.blend -P scripts/export-models.py
 ```
 
-The automated policy checks exercise fuel/input capacity, ammo compatibility, rejected deliveries, fermenter item hashes, exclusions, repair eligibility, supply cooldown boundaries, and radius/wandering limits. An isolated startup probe can check materials, hammer registration, recipe references, native consumer handlers, and player animation playback on the skeleton avatar without entering a world. It does not exercise AI pathfinding, multiplayer ownership handoffs, or save/load serialization. Before using this in an established world, verify the following in a test world:
+The automated policy checks exercise fuel/input capacity, ammo compatibility, rejected deliveries, fermenter item hashes, exclusions, repair eligibility, supply cooldown boundaries, radius/wandering limits, coffin recipe progression, shuffled idle choices, trophy mappings, and sitting roll boundaries. An isolated startup probe can check materials, hammer registration, recipe references, native consumer handlers, and player animation playback on the skeleton avatar without entering a world. It does not exercise AI pathfinding, multiplayer ownership handoffs, or save/load serialization. Before using this in an established world, verify the following in a test world:
 
 - Build all three tiers: each produces exactly one tame maid with 0/1/2 stars and 2/4/8 chest slots. Check the upright door's inner faces, opening sequence, cap, apron, sleeves, skirt, and skeleton palette while she walks.
 - Damage player-built walls within and beyond the radius. Only reachable pieces within the radius should be repaired; generated ruins should be ignored.
@@ -120,6 +154,8 @@ The automated policy checks exercise fuel/input capacity, ammo compatibility, re
 - Add iron scrap and coal: the smelter should receive both, up to its input/fuel limits. Repeat with flax, barley, mead bases, and the eitr refinery's materials. Full or busy consumers must not take another item.
 - Add ballista bolts and shield fuel. Bolts must match any type already loaded, and trophy filters must remain unchanged. No resources should be delivered to cooking stations, ovens, or obliterators.
 - Empty the task queue and place a chest or workbench nearby. She should walk over, dust it, holster the duster, and leave when a job appears. Check the default name and the revised outfit on a newly summoned maid.
+- Mount boss and skeleton trophies beyond 5 m but within the work radius. She should stand close in front, face the display, and use its mapped emote. Block the display or remove its trophy during a visit; she should stop without emoting through walls.
+- Place unoccupied chairs and thrones within 5 m. Check seated alignment and the 10-second stay/leave rolls. Add work while she sits, dismiss her, destroy the chair, and transfer ownership between clients; the pose and seat reservation should clear. A player or another maid must not occupy the same seat.
 - Block a job behind a closed door and put another outside. She must eventually skip the blocked job and work outside. A job on a different floor must not be serviced through that floor.
 - Open the coffin during pickup/return. Verify the item count stays correct. Fill the chest before a cancelled delivery and verify the carried item drops.
 - Kill her during a delivery, destroy her coffin, and save/reload while she carries fuel. Verify the resource is either carried, returned, consumed, or dropped exactly once.

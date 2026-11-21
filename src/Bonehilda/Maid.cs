@@ -35,7 +35,12 @@ public sealed class Maid : MonoBehaviour
     private float jobStarted;
     private float nextHomeCheck;
     private bool wasOwner;
-    private readonly Housekeeping housekeeping = new Housekeeping();
+    private readonly NavigationProgress navigation = new NavigationProgress();
+    private bool recoveringRoute;
+    private Vector3 recoveryPoint, recoveryGoal;
+    private float recoveryUntil;
+    private int recoveryAttempts;
+    private readonly IdleActivities idle = new IdleActivities();
     private WorkPhase phase;
     private float phaseEnds;
     private int dressLevel = -1;
@@ -124,6 +129,7 @@ public sealed class Maid : MonoBehaviour
 
     private void SetReturning(bool returning)
     {
+        StopNavigation();
         var data = View.GetZDO();
         data.Set(ReturningKey, returning);
         if (!returning && data.GetBool("BH_entering"))
@@ -142,6 +148,7 @@ public sealed class Maid : MonoBehaviour
         home.Set("BH_storedName", View.GetZDO().GetString("TamedName"));
         home.Set("BH_storedNameAuthor", View.GetZDO().GetString("TamedNameAuthor"));
         home.Set("BH_storedLastDelivery", View.GetZDO().GetLong(LastDeliveryKey));
+        home.Set("BH_storedNextDust", View.GetZDO().GetLong(IdleActivities.NextVisitKey));
     }
 
     internal void RestoreStored(ZDO home)
@@ -150,6 +157,7 @@ public sealed class Maid : MonoBehaviour
         View.GetZDO().Set("TamedName", home.GetString("BH_storedName", "Bonehilda"));
         View.GetZDO().Set("TamedNameAuthor", home.GetString("BH_storedNameAuthor"));
         View.GetZDO().Set(LastDeliveryKey, home.GetLong("BH_storedLastDelivery"));
+        View.GetZDO().Set(IdleActivities.NextVisitKey, home.GetLong("BH_storedNextDust"));
     }
 
     private void EnsureDefaultName()
@@ -169,17 +177,21 @@ public sealed class Maid : MonoBehaviour
     {
         if (!View || !View.IsValid() || !View.IsOwner() || character.IsDead())
         {
+            StopNavigation();
             SetCoffinPassage(null);
             wasOwner = false;
             return;
         }
         if (!wasOwner)
         {
+            StopNavigation();
+            ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
+            ai.ResetRandomMovement();
             // Discard local plans after an ownership handoff; committed cargo/cooldown live in the ZDO.
             job = null;
             phase = WorkPhase.None;
             animations.SetHammer(false, false);
-            housekeeping.Cancel(View);
+            idle.Cancel(this);
             wasOwner = true;
         }
         EnsureDefaultName();
@@ -218,6 +230,7 @@ public sealed class Maid : MonoBehaviour
         if (character.GetLevel() != home.Level) character.SetLevel(home.Level);
         if (View.GetZDO().GetBool("BH_stowing"))
         {
+            StopNavigation();
             ai.StopMoving();
             if (home.View.GetZDO().GetBool(Coffin.DismissedKey)) return;
             View.GetZDO().Set("BH_stowing", false);
@@ -233,35 +246,37 @@ public sealed class Maid : MonoBehaviour
             var direction = exit - transform.position;
             direction.y = 0;
             var elapsed = (ZNet.instance.GetTime().Ticks - View.GetZDO().GetLong("BH_exitStarted")) / (double)TimeSpan.TicksPerSecond;
-            if (!home.DoorOpen) { ai.StopMoving(); return; }
+            if (!home.DoorOpen) { StopNavigation(); ai.StopMoving(); return; }
             if (direction.magnitude > (elapsed > 7 ? .65f : .3f) && Vector3.Distance(transform.position, home.transform.position) < 5f)
             {
-                if (elapsed > 7) ai.MoveTo(delta, exit, .25f, false);
-                else ai.MoveTowards(direction, false);
+                Navigate(exit, delta, .25f, elapsed <= 7, home);
                 return;
             }
             View.GetZDO().Set(ExitingKey, false);
+            StopNavigation();
             SetCoffinPassage(null);
             nextScan = Time.time;
         }
         if (!MaintenancePolicy.InRadius((transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value + 1f))
         {
             CancelJob();
-            ai.MoveTo(delta, home.transform.position, 2f, false);
+            Navigate(home.ApproachPosition, delta, 1f);
             return;
         }
 
         if (phase != WorkPhase.None)
         {
+            StopNavigation();
             UpdateWork(home);
             return;
         }
-        if (Time.time < nextAction) { ai.StopMoving(); return; }
+        if (Time.time < nextAction) { StopNavigation(); ai.StopMoving(); return; }
         if (job != null && (!Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value)) CancelJob();
         if (job == null && cargo.GetAllItems().Count > 0)
         {
+            idle.Cancel(this);
             var access = WorkPoint(home.Piece);
-            if (WalkTo(access, delta) && CanReach(home.Piece, access)) ReturnCargo(home);
+            if (WalkTo(access, delta, home.Piece)) ReturnCargo(home);
             return;
         }
         if (job == null && Time.time >= nextScan)
@@ -269,35 +284,37 @@ public sealed class Maid : MonoBehaviour
             nextScan = Time.time + Plugin.ScanInterval.Value;
             job = FindJob(home);
             jobStarted = Time.time;
-            if (job != null) housekeeping.Cancel(View);
+            if (job != null) idle.Cancel(this);
         }
         if (job == null)
         {
             if (Plugin.Wander.Value)
             {
                 ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
-                if (housekeeping.Tick(this, ai, home, pieces, delta)) return;
+                ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
+                if (idle.Tick(this, ai, home, pieces, delta)) return;
+                StopNavigation();
                 // Our AI patch skips BaseAI.UpdateAI, which normally advances the wander timer.
                 ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
                 ai.RandomMovement(delta, home.transform.position, false);
             }
             else
             {
-                housekeeping.Cancel(View);
-                if (Vector3.Distance(transform.position, home.transform.position) > 3f) ai.MoveTo(delta, home.transform.position, 2f, false);
-                else ai.StopMoving();
+                idle.Cancel(this);
+                if (Vector3.Distance(transform.position, home.transform.position) > 3f) Navigate(home.ApproachPosition, delta, 1f);
+                else { StopNavigation(); ai.StopMoving(); }
             }
             return;
         }
         if (job.Supply != null && cargo.GetAllItems().Count == 0)
         {
             var access = WorkPoint(home.Piece);
-            if (WalkTo(access, delta) && CanReach(home.Piece, access)) PickUpSupply(home, job.Supply);
+            if (WalkTo(access, delta, home.Piece)) PickUpSupply(home, job.Supply);
             return;
         }
         var port = job.Supply?.Port;
         var point = port ? port!.position : WorkPoint(job.Piece);
-        if (!WalkTo(point, delta) || !CanReach(job.Piece, point) || Time.time < nextAction) return;
+        if (!WalkTo(point, delta, job.Piece) || Time.time < nextAction) return;
         ai.LookAt(point);
         if (job.Wear)
         {
@@ -314,7 +331,7 @@ public sealed class Maid : MonoBehaviour
     private void ReturnToCoffin(Coffin home, float delta)
     {
         if (job != null || phase != WorkPhase.None) CancelJob();
-        if (Time.time < nextAction) { ai.StopMoving(); return; }
+        if (Time.time < nextAction) { StopNavigation(); ai.StopMoving(); return; }
         var data = View.GetZDO();
         if (!data.GetBool("BH_entering"))
         {
@@ -330,11 +347,11 @@ public sealed class Maid : MonoBehaviour
                 var clearApproach = distance.sqrMagnitude <= 16f && Mathf.Abs(local.y) <= .8f
                     && !Physics.SphereCast(transform.position + Vector3.up * .5f, .28f, distance.normalized,
                         out _, distance.magnitude, LayerMask.GetMask("piece", "terrain", "static_solid"));
-                if (clearApproach || MaintenancePolicy.NearCoffinApproach(local.x, local.y, local.z)) ai.MoveTowards(distance, false);
-                else ai.MoveTo(delta, front, 0.65f, false);
+                Navigate(front, delta, .65f, clearApproach || MaintenancePolicy.NearCoffinApproach(local.x, local.y, local.z), home);
                 return;
             }
             ai.StopMoving();
+            StopNavigation();
             if (home.Chest.IsInUse()) return;
             if (cargo.GetAllItems().Count > 0) { ReturnCargo(home); return; }
             if (!home.View.IsOwner()) home.View.ClaimOwnership();
@@ -345,11 +362,11 @@ public sealed class Maid : MonoBehaviour
             SetCoffinPassage(home);
         }
         if (!home.View.IsOwner()) home.View.ClaimOwnership();
-        if (!home.View.IsOwner()) { ai.StopMoving(); return; }
+        if (!home.View.IsOwner()) { StopNavigation(); ai.StopMoving(); return; }
         home.HoldDoor();
-        var direction = home.InteriorPosition - transform.position; direction.y = 0;
         var inside = home.transform.InverseTransformPoint(transform.position);
-        if (!MaintenancePolicy.InsideCoffin(inside.x, inside.y, inside.z)) { ai.MoveTowards(direction, false); return; }
+        if (!MaintenancePolicy.InsideCoffin(inside.x, inside.y, inside.z)) { Navigate(home.InteriorPosition, delta, .02f, true, home); return; }
+        StopNavigation();
         ai.StopMoving();
         home.Store(this);
     }
@@ -499,15 +516,112 @@ public sealed class Maid : MonoBehaviour
         return true;
     }
 
-    private bool WalkTo(Vector3 point, float dt)
+    private bool WalkTo(Vector3 point, float dt, Piece piece)
     {
-        if (Vector3.Distance(transform.position, point) <= 2.4f)
+        if (Vector3.Distance(transform.position, point) <= 2.4f && CanReach(piece, point))
         {
+            StopNavigation();
             ai.StopMoving();
             return true;
         }
-        ai.MoveTo(dt, point, 1.5f, false);
+        Navigate(point, dt, 1.5f);
         return false;
+    }
+
+    internal void StopNavigation()
+    {
+        navigation.Reset();
+        recoveringRoute = false;
+    }
+
+    internal void Navigate(Vector3 point, float dt, float stoppingDistance, bool direct = false, Coffin? passage = null)
+    {
+        var feet = transform.position;
+        if (recoveringRoute && (point - recoveryGoal).sqrMagnitude > 1f) StopNavigation();
+        if (recoveringRoute)
+        {
+            var offset = recoveryPoint - feet;
+            offset.y = 0;
+            if (offset.magnitude <= .5f || Time.time >= recoveryUntil)
+            {
+                StopNavigation();
+                ResetPath();
+            }
+            else
+            {
+                if (ClearRecoveryRoute(recoveryPoint, passage)) ai.MoveTowards(offset, false);
+                else ai.MoveTo(dt, recoveryPoint, .5f, false);
+                return;
+            }
+        }
+        if (navigation.Advance(dt, feet.x, feet.z, point.x, point.y, point.z, Plugin.StuckTime.Value)
+            && TryBackOff(point, passage))
+        {
+            recoveryGoal = point;
+            recoveringRoute = true;
+            recoveryUntil = Time.time + 4f;
+            ResetPath();
+            // Move away on this frame, rather than spending another frame at the obstruction.
+            Navigate(point, dt, stoppingDistance, direct, passage);
+            return;
+        }
+        if (direct)
+        {
+            var direction = point - feet; direction.y = 0;
+            ai.MoveTowards(direction, false);
+        }
+        else ai.MoveTo(dt, point, stoppingDistance, false);
+    }
+
+    private void ResetPath()
+    {
+        // BaseAI otherwise reuses a failed route to the same point for five seconds.
+        ai.m_lastFindPathTime = -100f;
+        ai.m_path.Clear();
+    }
+
+    private bool TryBackOff(Vector3 goal, Coffin? passage)
+    {
+        var feet = transform.position;
+        var away = passage ? passage!.transform.forward : feet - goal;
+        away.y = 0;
+        if (away.sqrMagnitude < .01f) away = -transform.forward;
+        away.Normalize();
+        var alternate = (++recoveryAttempts % 2 == 0 ? -1f : 1f);
+        foreach (var angle in new[] { 30f * alternate, -45f * alternate, 80f * alternate, -95f * alternate, 0f })
+        {
+            var candidate = feet + Quaternion.Euler(0, angle, 0) * away * 2f;
+            if (!RecoveryFloor(candidate, feet.y, out candidate)) continue;
+            var middle = (feet + candidate) * .5f;
+            if (!RecoveryFloor(middle, feet.y, out _)) continue;
+            if (!ClearRecoveryRoute(candidate, passage) && !ai.HavePath(candidate)) continue;
+            recoveryPoint = candidate;
+            return true;
+        }
+        return false;
+    }
+
+    private static bool RecoveryFloor(Vector3 point, float currentY, out Vector3 floor)
+    {
+        var solids = LayerMask.GetMask("piece", "terrain", "static_solid");
+        if (Physics.Raycast(point + Vector3.up * .8f, Vector3.down, out var hit, 1.6f, solids, QueryTriggerInteraction.Ignore)
+            && hit.normal.y >= .65f && hit.point.y - currentY <= .45f && currentY - hit.point.y <= .75f)
+        {
+            floor = hit.point;
+            return true;
+        }
+        floor = default;
+        return false;
+    }
+
+    private bool ClearRecoveryRoute(Vector3 point, Coffin? passage)
+    {
+        var direction = point - transform.position;
+        var solids = LayerMask.GetMask("piece", "terrain", "static_solid");
+        foreach (var hit in Physics.SphereCastAll(transform.position + Vector3.up * .75f, .25f,
+                     direction.normalized, direction.magnitude, solids, QueryTriggerInteraction.Ignore))
+            if (!passage || hit.collider.GetComponentInParent<Coffin>() != passage) return false;
+        return true;
     }
 
     private Vector3 WorkPoint(Piece piece)
@@ -575,7 +689,7 @@ public sealed class Maid : MonoBehaviour
 
     private void CancelJob()
     {
-        housekeeping.Cancel(View);
+        idle.Cancel(this);
         if (phase == WorkPhase.Drawing || phase == WorkPhase.Repairing || phase == WorkPhase.Recovering)
             animations.SetHammer(false);
         phase = WorkPhase.None;

@@ -10,28 +10,30 @@ internal sealed class Housekeeping
     private Piece? previous;
     private Vector3 localPoint;
     private float deadline;
-    private float nextChoice;
     private bool sweeping;
 
-    internal bool Tick(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces, float delta)
+    internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces)
     {
-        if (target == null && Time.time >= nextChoice)
+        target = null;
+        var distance = float.MaxValue;
+        foreach (var piece in pieces)
         {
-            var distance = float.MaxValue;
-            foreach (var piece in pieces)
-            {
-                if (!piece || piece == previous || !Eligible(piece, home, ai.m_randomMoveRange)) continue;
-                var d = (piece.transform.position - maid.transform.position).sqrMagnitude;
-                if (d >= distance) continue;
-                if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
-                target = piece;
-                localPoint = piece.transform.InverseTransformPoint(candidatePoint);
-                distance = d;
-            }
-            if (target == null) previous = null;
-            nextChoice = Time.time + 3f;
-            deadline = Time.time + 16f;
+            if (!piece || piece == previous || !Eligible(piece, home, ai.m_randomMoveRange)) continue;
+            var d = (piece.transform.position - maid.transform.position).sqrMagnitude;
+            if (d >= distance) continue;
+            if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
+            target = piece;
+            localPoint = piece.transform.InverseTransformPoint(candidatePoint);
+            distance = d;
         }
+        if (target == null) previous = null;
+        deadline = Time.time + 16f;
+        return target;
+    }
+
+    internal bool Tick(Maid maid, MonsterAI ai, Coffin home, float delta)
+    {
+        var data = maid.View.GetZDO();
         if (target == null || Time.time >= deadline || !Eligible(target, home, ai.m_randomMoveRange))
         {
             if (target != null || sweeping) Cancel(maid.View);
@@ -57,22 +59,21 @@ internal sealed class Housekeeping
                 Cancel(maid.View);
                 return false;
             }
-            ai.MoveTowards(away, false);
+            maid.Navigate(step, delta, .15f, true);
             return true;
         }
         var reachable = maid.CanReach(target, point);
         if (distanceToEdge > spacing || !reachable)
         {
             if (sweeping) { Cancel(maid.View); return false; }
-            if (reachable && distanceToEdge < 1.25f) ai.MoveTowards(deltaToSurface, false);
-            else ai.MoveTo(delta, point, .5f, false);
+            maid.Navigate(point, delta, .5f, reachable && distanceToEdge < 1.25f);
             return true;
         }
         ai.StopMoving();
+        maid.StopNavigation();
         ai.LookAt(point);
         if (!sweeping && Vector3.Dot(maid.transform.forward, deltaToSurface.normalized) > .65f)
         {
-            var data = maid.View.GetZDO();
             var forward = deltaToSurface.normalized;
             using var surface = new DustingSurface(target);
             if (!surface.TryStroke(point, forward, home.Stars, out var left, out var side, out var far))
@@ -132,7 +133,10 @@ internal sealed class Housekeeping
     {
         if (view && view.IsValid() && view.IsOwner() && view.GetZDO().GetLong(FeatherDuster.StartKey) != 0)
             view.GetZDO().Set(FeatherDuster.StartKey, 0L);
-        if (target != null) { previous = target; nextChoice = Time.time + 3f; }
+        if (target != null)
+        {
+            previous = target;
+        }
         target = null;
         sweeping = false;
     }

@@ -15,7 +15,7 @@ internal static class DressVisuals
         if (outfit && outfit.TryGetComponent<SkinnedMeshRenderer>(out var skin))
         {
             var tier = Mathf.Clamp(stars, 0, 2);
-            skin.sharedMaterial = Visuals.Palette(skin.sharedMaterial, tier);
+            skin.sharedMaterial = Visuals.ClothPalette(skin.sharedMaterial, tier);
             skin.SetBlendShapeWeight(0, tier * 50f);
         }
     }
@@ -62,8 +62,12 @@ internal static class DressVisuals
         var levelEffects = skeleton.GetComponentInChildren<LevelEffects>(true);
         var maxScale = levelEffects ? levelEffects.m_levelSetups.Take(2).Select(level => level.m_scale).DefaultIfEmpty(1f).Max() : 1f;
         skin.localBounds = new Bounds(new Vector3(0, 1.04f, 0) * maxScale, new Vector3(2.25f, 2.45f, 1.7f) * maxScale);
-        var template = Visuals.Template(PrefabManager.Instance.GetPrefab("piece_chest_wood"));
-        skin.sharedMaterial = Visuals.Palette(template, 0);
+        // A Hildir dress provides the game's actual cloth shader. Cloning the
+        // chest material also imports building-specific rain/noise behavior.
+        var dress = PrefabManager.Instance.GetPrefab("ArmorDress10");
+        var template = dress ? dress.GetComponentsInChildren<Renderer>(true).SelectMany(r => r.sharedMaterials)
+            .FirstOrDefault(m => m && m.shader && m.shader.name == "Custom/Creature") : null;
+        skin.sharedMaterial = Visuals.ClothPalette(template ? template! : source.sharedMaterial, 0);
         var lod = skeleton.GetComponentInChildren<LODGroup>(true);
         if (!lod) return;
         var levels = lod.GetLODs();

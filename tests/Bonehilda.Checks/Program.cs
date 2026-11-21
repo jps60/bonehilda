@@ -73,7 +73,103 @@ var checks = new (string Name, bool Passed)[]
     ("standing beside the coffin cannot complete dismissal", !MaintenancePolicy.InsideCoffin(.6f, 0, .04f)),
     ("standing behind the coffin cannot complete dismissal", !MaintenancePolicy.InsideCoffin(0, 0, -.5f)),
     ("standing above the coffin cannot complete dismissal", !MaintenancePolicy.InsideCoffin(0, 2, .04f)),
+    ("stationary navigation retries after the configured observation time", StalledRouteRetries()),
+    ("slow forward progress avoids false stuck detection", MovingRouteDoesNotRetry()),
+    ("a changed destination gets its own stuck timer", ChangedRouteResetsTimer()),
+    ("ownership handoff clears a pending stuck timeout", ResetClearsTimer()),
+    ("a single long frame is not evidence of a blocked route", LongFrameDoesNotRetry()),
+    ("small physics jitter does not hide an obstruction", JitterStillRetries()),
 };
+checks = checks.Concat(IdleChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static bool StalledRouteRetries()
+{
+    var route = new NavigationProgress();
+    route.Advance(.1f, 0, 0, 10, 0, 0, 6);
+    for (var i = 0; i < 59; i++)
+        if (route.Advance(.1f, 0, 0, 10, 0, 0, 6)) return false;
+    var retries = 0;
+    for (var i = 0; i < 3; i++)
+        if (route.Advance(.1f, 0, 0, 10, 0, 0, 6)) retries++;
+    return retries == 1;
+}
+
+static bool MovingRouteDoesNotRetry()
+{
+    var route = new NavigationProgress();
+    for (var i = 0; i < 300; i++)
+        if (route.Advance(.1f, i * .015f, 0, 10, 0, 0, 6)) return false;
+    return true;
+}
+
+static bool ChangedRouteResetsTimer()
+{
+    var route = new NavigationProgress();
+    for (var i = 0; i < 55; i++) route.Advance(.1f, 0, 0, 10, 0, 0, 6);
+    for (var i = 0; i < 20; i++)
+        if (route.Advance(.1f, 0, 0, 0, 0, 10, 6)) return false;
+    return true;
+}
+
+static bool ResetClearsTimer()
+{
+    var route = new NavigationProgress();
+    for (var i = 0; i < 55; i++) route.Advance(.1f, 0, 0, 10, 0, 0, 6);
+    route.Reset();
+    for (var i = 0; i < 20; i++)
+        if (route.Advance(.1f, 0, 0, 10, 0, 0, 6)) return false;
+    return true;
+}
+
+static bool LongFrameDoesNotRetry()
+{
+    var route = new NavigationProgress();
+    route.Advance(.1f, 0, 0, 10, 0, 0, 6);
+    return !route.Advance(20, 0, 0, 10, 0, 0, 6);
+}
+
+static bool JitterStillRetries()
+{
+    var route = new NavigationProgress();
+    for (var i = 0; i < 70; i++)
+        if (route.Advance(.1f, (i % 2 == 0 ? .03f : -.03f), 0, 10, 0, 0, 6)) return true;
+    return false;
+}
+
+static IEnumerable<(string Name, bool Passed)> IdleChecks()
+{
+    var dresses = new[] { "ArmorDress10", "ArmorDress1", "ArmorDress6" };
+    for (var tier = 0; tier < 3; tier++)
+    {
+        var recipe = CoffinRecipes.ForTier(tier);
+        yield return ($"tier {tier} has exactly one skeleton trophy", recipe.Single(r => r.Item == "TrophySkeleton").Amount == 1);
+        yield return ($"tier {tier} has one progressing Hildir dress", recipe.Count(r => r.Item.StartsWith("ArmorDress")) == 1 && recipe.Single(r => r.Item == dresses[tier]).Amount == 1);
+        yield return ($"tier {tier} uses ectoplasm without eitr or wisps", recipe.Single(r => r.Item == "Ectoplasm").Amount == (2 << tier) && !recipe.Any(r => r.Item is "Eitr" or "Wisp" or "YggdrasilWood"));
+        yield return ($"tier {tier} fits the recipe UI", recipe.Length <= 6 && recipe.All(r => r.Amount > 0));
+    }
+    var remaining = 0;
+    var seen = 0;
+    var previous = 0;
+    var noRepeat = true;
+    for (var i = 0; i < 3; i++)
+    {
+        var choice = IdleDeck.Choose(7, ref remaining, previous, .4f);
+        noRepeat &= (seen & choice) == 0;
+        seen |= choice; previous = choice;
+    }
+    yield return ("idle deck visits all available activities before refilling", noRepeat && seen == 7 && remaining == 0);
+    yield return ("refilled deck avoids immediate repetition", IdleDeck.Choose(7, ref remaining, previous, .99f) != previous);
+    remaining = 7;
+    yield return ("disabled activities are never selected", IdleDeck.Choose(1, ref remaining, 0, .99f) == 1);
+    yield return ("an unavailable deck is empty", IdleDeck.Choose(0, ref remaining, 0, .5f) == 0);
+    remaining = 0;
+    yield return ("one available activity can repeat", IdleDeck.Choose(4, ref remaining, 4, 0) == 4);
+    yield return ("sitting gently favors continuing", IdleDeck.ContinueSitting(.5999f, .6f) && !IdleDeck.ContinueSitting(.6f, .6f));
+    yield return ("zero sitting chance always leaves", !IdleDeck.ContinueSitting(0, 0));
+    foreach (var boss in new[] { "TrophyEikthyr", "TrophyTheElder", "TrophyBonemass", "TrophyDragonQueen", "TrophyGoblinKing", "TrophySeekerQueen", "TrophyFader", "TrophyHatchling" })
+        yield return ($"boss reaction exists: {boss}", TrophyEmotes.Map.TryGetValue(boss, out var emotes) && emotes.Length is >= 1 and <= 2);
+    yield return ("mounted skeleton trophies get pointing", TrophyEmotes.Map["TrophySkeleton"].Contains("point"));
+}

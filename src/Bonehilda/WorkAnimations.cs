@@ -17,6 +17,9 @@ internal sealed class WorkAnimations : MonoBehaviour
     private GameObject belted = null!;
     private string swing = "swing_hammer";
     private int hammerState;
+    private const string EmoteKey = "BH_idleEmote", EmoteId = "BH_idleEmoteId", EmoteEnd = "BH_idleEmoteEnd";
+    private int seenEmote;
+    private Animator animator = null!;
 
     internal static void Configure(GameObject maid, GameObject player)
     {
@@ -55,7 +58,8 @@ internal sealed class WorkAnimations : MonoBehaviour
     {
         view = GetComponent<ZNetView>();
         sync = GetComponent<ZSyncAnimation>();
-        GetComponentInChildren<Animator>().SetBool("wakeup", false);
+        animator = GetComponentInChildren<Animator>();
+        animator.SetBool("wakeup", false);
         var equipment = GetComponent<VisEquipment>();
         var hammer = PrefabManager.Instance.GetPrefab("Hammer");
         var data = hammer.GetComponent<ItemDrop>().m_itemData;
@@ -90,7 +94,40 @@ internal sealed class WorkAnimations : MonoBehaviour
         return tool;
     }
 
-    private void LateUpdate() => RefreshTool();
+    private void LateUpdate()
+    {
+        RefreshTool();
+        if (!view || !view.IsValid() || !animator) return;
+        var data = view.GetZDO();
+        if (view.IsOwner() && data.GetString(EmoteKey).Length != 0 && ZNet.instance.GetTime().Ticks >= data.GetLong(EmoteEnd)) StopEmote();
+        var revision = data.GetInt(EmoteId);
+        if (seenEmote == revision) return;
+        seenEmote = revision;
+        animator.SetTrigger("emote_stop");
+        var emote = data.GetString(EmoteKey);
+        if (emote.Length == 0 || ZNet.instance.GetTime().Ticks >= data.GetLong(EmoteEnd)) return;
+        animator.ResetTrigger("emote_stop");
+        animator.SetTrigger("emote_" + emote);
+    }
+
+    internal void Emote(string name, float seconds)
+    {
+        SetHammer(false, false);
+        var data = view.GetZDO();
+        data.Set(EmoteKey, name);
+        data.Set(EmoteEnd, ZNet.instance.GetTime().Ticks + (long)(seconds * TimeSpan.TicksPerSecond));
+        data.Set(EmoteId, data.GetInt(EmoteId) + 1);
+    }
+
+    internal void StopEmote()
+    {
+        if (!view) view = GetComponent<ZNetView>();
+        if (!view || !view.IsValid() || !view.IsOwner()) return;
+        var data = view.GetZDO();
+        if (data.GetString(EmoteKey).Length == 0) return;
+        data.Set(EmoteKey, "");
+        data.Set(EmoteId, data.GetInt(EmoteId) + 1);
+    }
 
     private void RefreshTool()
     {
