@@ -43,7 +43,7 @@ internal sealed class Housekeeping
         deltaToSurface.y = 0;
         var distanceToEdge = deltaToSurface.magnitude;
         // Leave room in front of the apron for the wooden grip throughout the sweep.
-        var spacing = Mathf.Lerp(.64f, .88f, Mathf.InverseLerp(.45f, 1.05f, point.y - maid.transform.position.y))
+        var spacing = Mathf.Lerp(.88f, .92f, Mathf.InverseLerp(.45f, 1.05f, point.y - maid.transform.position.y))
             * (1f + .06f * home.Stars);
         if (!sweeping && distanceToEdge < spacing - .09f)
         {
@@ -73,12 +73,50 @@ internal sealed class Housekeeping
         if (!sweeping && Vector3.Dot(maid.transform.forward, deltaToSurface.normalized) > .65f)
         {
             var data = maid.View.GetZDO();
-            data.Set(FeatherDuster.SurfaceKey, point);
+            var forward = deltaToSurface.normalized;
+            var right = Vector3.Cross(Vector3.up, forward);
+            var colliders = target.GetComponentsInChildren<Collider>();
+            var center = SweepEnd(colliders, point, forward * .09f);
+            var left = SweepEnd(colliders, center, -right * .25f);
+            var side = SweepEnd(colliders, left, right * .64f);
+            var far = SweepEnd(colliders, left, forward * (.22f + .025f * home.Stars) + right * .12f);
+            if ((side - left).sqrMagnitude < .01f && (far - left).sqrMagnitude < .01f)
+            {
+                Cancel(maid.View);
+                return false;
+            }
+            data.Set(FeatherDuster.SurfaceKey, left);
+            data.Set(FeatherDuster.SideKey, (side - left).sqrMagnitude >= .01f ? side : far);
+            data.Set(FeatherDuster.FarKey, (far - left).sqrMagnitude >= .01f ? far : side);
             data.Set(FeatherDuster.StartKey, ZNet.instance.GetTime().Ticks);
             sweeping = true;
             deadline = Time.time + FeatherDuster.Seconds;
         }
         return true;
+    }
+
+    // Probe connected top faces once per chore. A narrow seat or an open gap
+    // shortens the sweep before the bristles leave the selected piece.
+    private static Vector3 SweepEnd(Collider[] colliders, Vector3 from, Vector3 offset)
+    {
+        var end = from;
+        var steps = Mathf.CeilToInt(offset.magnitude / .04f);
+        for (var i = 1; i <= steps; i++)
+        {
+            var sample = from + offset * ((float)i / steps);
+            var ray = new Ray(sample + Vector3.up * .035f, Vector3.down);
+            var supported = false;
+            foreach (var collider in colliders)
+            {
+                if (!collider.enabled || collider.isTrigger || !collider.Raycast(ray, out var hit, .07f)
+                    || hit.normal.y < .85f) continue;
+                end = hit.point;
+                supported = true;
+                break;
+            }
+            if (!supported) break;
+        }
+        return end;
     }
 
     private static bool Eligible(Piece piece, Coffin home, float radius)

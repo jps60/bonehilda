@@ -9,27 +9,24 @@ internal sealed class FeatherDuster : MonoBehaviour
 {
     internal const string StartKey = "BH_dustStart";
     internal const string SurfaceKey = "BH_dustSurface";
-    internal const float Seconds = 3.6f;
-    // One reach and pullback. The wrist starts turning before the elbow finishes
-    // the reach. A separate angle track lets the handle take a different path home.
+    internal const string SideKey = "BH_dustSide";
+    internal const string FarKey = "BH_dustFar";
+    private const float Settle = .42f;
+    private const float Cycle = 1.45f;
+    internal const float Seconds = Settle + 2f * Cycle + .40f;
+    // A deliberate reach, a short turn, then a quicker gathering stroke.
     private static readonly AnimationCurve Travel = new AnimationCurve(
-        new Keyframe(0f, -1f, 0f, 0f), new Keyframe(.24f, .02f, 6f, 6f),
-        new Keyframe(.48f, 1f, 0f, 0f), new Keyframe(.76f, -.04f, -5.4f, -5.4f),
-        new Keyframe(1f, -1f, 0f, 0f));
-    private static readonly AnimationCurve HandleYaw = new AnimationCurve(
-        new Keyframe(0f, -55f, 45f, 45f), new Keyframe(.20f, -48f, 32f, 32f),
-        new Keyframe(.39f, -41.5f, 0f, 0f), new Keyframe(.54f, -48.5f, -65f, -65f),
-        new Keyframe(.83f, -62f, 0f, 0f), new Keyframe(1f, -55f, 45f, 45f));
-    private static readonly AnimationCurve HandlePitch = new AnimationCurve(
-        new Keyframe(0f, 18f, -32f, -32f), new Keyframe(.38f, 7f, 0f, 0f),
-        new Keyframe(.62f, 16f, 64f, 64f), new Keyframe(.85f, 27f, 0f, 0f),
-        new Keyframe(1f, 18f, -32f, -32f));
+        new Keyframe(0f, 0f, 0f, 0f), new Keyframe(.26f, .49f, 2.6f, 2.6f),
+        new Keyframe(.51f, 1f, 0f, 0f), new Keyframe(.57f, .99f, -.45f, -.45f),
+        new Keyframe(.78f, .42f, -3.3f, -3.3f), new Keyframe(.97f, 0f, 0f, 0f),
+        new Keyframe(1f, 0f, 0f, 0f));
     private ZNetView? view;
     private Transform? spine, head, freeArm, freeElbow, freeHand, shoulder, elbow, hand, belt, tool, plume;
+    private Transform? freeThigh, freeIndex, freeLittle;
     private DusterGrip? grip;
     private DustingStance? stance;
     private FeatherDust? dust;
-    private Quaternion spineRest, headRest, freeArmRest, freeElbowRest, shoulderRest, elbowRest, handRest;
+    private Quaternion spineRest, headRest, freeArmRest, freeElbowRest, freeHandRest, shoulderRest, elbowRest, handRest;
     private bool posed;
 
     private void Start()
@@ -41,6 +38,9 @@ internal sealed class FeatherDuster : MonoBehaviour
         freeArm = animator.GetBoneTransform(HumanBodyBones.LeftUpperArm);
         freeElbow = animator.GetBoneTransform(HumanBodyBones.LeftLowerArm);
         freeHand = animator.GetBoneTransform(HumanBodyBones.LeftHand);
+        freeThigh = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+        freeIndex = animator.GetBoneTransform(HumanBodyBones.LeftIndexProximal);
+        freeLittle = animator.GetBoneTransform(HumanBodyBones.LeftLittleProximal);
         shoulder = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
         elbow = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
         hand = animator.GetBoneTransform(HumanBodyBones.RightHand);
@@ -69,6 +69,7 @@ internal sealed class FeatherDuster : MonoBehaviour
         {
             freeArm.localRotation = freeArmRest;
             freeElbow.localRotation = freeElbowRest;
+            freeHand.localRotation = freeHandRest;
         }
         shoulder.localRotation = shoulderRest;
         elbow.localRotation = elbowRest;
@@ -89,6 +90,7 @@ internal sealed class FeatherDuster : MonoBehaviour
             if (tool.parent != belt)
             {
                 plume.localRotation = Quaternion.identity;
+                plume.localScale = Vector3.one;
                 tool.SetParent(belt, true);
                 tool.localPosition = Vector3.zero;
                 tool.localRotation = Quaternion.identity;
@@ -108,54 +110,59 @@ internal sealed class FeatherDuster : MonoBehaviour
         handRest = hand.localRotation;
         posed = true;
         var blend = Mathf.SmoothStep(0f, 1f, Mathf.Min(elapsed / .50f, (Seconds - elapsed) / .42f));
-        var cycles = elapsed / 1.55f;
+        var cycles = Mathf.Clamp((elapsed - Settle) / Cycle, 0f, 2f);
         var phase = Mathf.Repeat(cycles, 1f);
-        var across = Travel.Evaluate(phase);
-        var velocity = (Travel.Evaluate(Mathf.Repeat(phase + .01f, 1f))
-            - Travel.Evaluate(Mathf.Repeat(phase - .01f, 1f))) / .12f;
-        var reach = (across + 1f) * .5f;
+        var travel = Travel.Evaluate(phase);
         var surface = data.GetVec3(SurfaceKey, transform.position);
+        var side = data.GetVec3(SideKey, surface + transform.right * .40f);
+        var far = data.GetVec3(FarKey, surface + transform.forward * .25f);
+        var stroke = (cycles < 1f ? side : far) - surface;
+        var strokePoint = surface + travel * stroke;
         var height = Mathf.InverseLerp(.45f, 1.10f, surface.y - transform.position.y);
-        var strokePoint = surface + transform.right * (Mathf.Lerp(.13f, .23f, height) * across + .08f * (1f - reach))
-            + transform.forward * (.11f + .075f * reach);
-        var tip = strokePoint + Vector3.up * .003f;
+        var across = Mathf.Clamp(Vector3.Dot(strokePoint - (surface + side) * .5f, transform.right) * 3f, -1f, 1f);
+        var reach = cycles < 1f ? .55f - .20f * across : .55f - .20f * across + travel * .30f;
         PoseBody(spine, shoulder, elbow, hand, stance, surface, strokePoint, height, across, reach, blend);
-        grip.CloseFingers(blend);
-        var pitch = HandlePitch.Evaluate(phase) + Mathf.Lerp(11f, 5f, height);
-        var yaw = HandleYaw.Evaluate(phase) - 4.5f * height;
-        var brushDirection = transform.rotation * Quaternion.Euler(pitch, yaw, 0f) * Vector3.forward;
-        var palmRoll = Mathf.Lerp(-30f, -7f, height) + 6.5f * across;
-        var turn = Quaternion.AngleAxis(palmRoll, brushDirection) * Quaternion.LookRotation(brushDirection, Vector3.up)
-            * Quaternion.Inverse(Quaternion.LookRotation(tool.up, grip.Dorsal));
-        var desiredHand = turn * hand.rotation;
-        var nativeHand = hand.localRotation;
-        hand.rotation = desiredHand;
-        var sweep = (transform.right + transform.forward * .40f).normalized;
-        DusterPlume.Bend(plume, tool, sweep, velocity, Mathf.Abs(velocity), blend);
-        var wristTarget = tip - (DusterPlume.End(plume) - hand.position);
-        var dorsal = grip.Dorsal;
-        hand.localRotation = nativeHand;
-        var elbowPole = transform.right * .30f - transform.up * .68f - transform.forward;
-        DustingStance.Reach(shoulder, elbow, hand.position, wristTarget, elbowPole, blend);
-        // Let the forearm carry the axial roll, then finish the steering at the wrist.
-        var forearm = (hand.position - elbow.position).normalized;
-        var roll = Vector3.SignedAngle(Vector3.ProjectOnPlane(grip.Dorsal, forearm),
-            Vector3.ProjectOnPlane(dorsal, forearm), forearm);
-        elbow.rotation = Quaternion.AngleAxis(roll * blend, forearm) * elbow.rotation;
-        hand.rotation = Quaternion.Slerp(hand.rotation, desiredHand, blend);
-        dust?.Sweep(start, cycles + .25f, DusterPlume.End(plume), surface, sweep);
+        grip.CloseFingers();
+
+        // Solve to the working feathers. The forearm, seated handle and wrist form
+        // the second link, so a change in reach opens the elbow without folding the wrist.
+        elbow.rotation = Quaternion.FromToRotation(hand.position - elbow.position, transform.forward) * elbow.rotation;
+        var delayedPhase = Mathf.Repeat(phase - .055f, 1f);
+        var drag = (Travel.Evaluate(Mathf.Repeat(delayedPhase + .01f, 1f))
+            - Travel.Evaluate(Mathf.Repeat(delayedPhase - .01f, 1f))) / .065f;
+        var direction = transform.rotation * Quaternion.Euler(9f + 3f * drag, -29f + 3f * across, 0f) * Vector3.forward;
+        hand.rotation = Quaternion.LookRotation(direction, Vector3.up)
+            * Quaternion.Inverse(Quaternion.LookRotation(tool.up, grip.Dorsal)) * hand.rotation;
+        var restTip = tool.TransformPoint(Vector3.up * DusterPlume.Tip);
+        var contact = strokePoint + Vector3.up * .012f;
+        var pole = transform.right * .92f - transform.up * .36f - transform.forward * .46f;
+        DustingStance.Reach(shoulder, elbow, restTip, contact, pole, 1f);
+        // Roll the solved chain around the contact line to keep the back of the hand facing up.
+        var axis = (tool.TransformPoint(Vector3.up * DusterPlume.Tip) - elbow.position).normalized;
+        var roll = Vector3.SignedAngle(Vector3.ProjectOnPlane(grip.Dorsal, axis),
+            Vector3.ProjectOnPlane(Vector3.up, axis), axis);
+        elbow.rotation = Quaternion.AngleAxis(roll, axis) * elbow.rotation;
+
+        DusterPlume.Bend(plume, tool, stroke.normalized, drag, Mathf.Abs(drag), blend);
+        var bristles = DusterPlume.Contact(tool, plume);
+        DustingStance.Reach(shoulder, elbow, bristles, strokePoint - Vector3.up * .002f, pole, 1f);
+
+        shoulder.localRotation = Quaternion.Slerp(shoulderRest, shoulder.localRotation, blend);
+        elbow.localRotation = Quaternion.Slerp(elbowRest, elbow.localRotation, blend);
+        hand.localRotation = Quaternion.Slerp(handRest, hand.localRotation, blend);
+        dust?.Sweep(start, cycles + .25f, DusterPlume.Contact(tool, plume), strokePoint, stroke.normalized);
     }
 
     private void PoseBody(Transform spine, Transform shoulder, Transform elbow, Transform hand, DustingStance stance,
         Vector3 surface, Vector3 strokePoint, float height, float across, float reach, float blend)
     {
-        var lean = Mathf.Lerp(41f, 18f, height) + 7f * reach;
-        var torso = Quaternion.AngleAxis(across * 11f * blend, transform.up)
+        var lean = Mathf.Lerp(31f, 13f, height) + 6f * reach;
+        var torso = Quaternion.AngleAxis(-across * 4f * blend, transform.up)
             * Quaternion.AngleAxis(lean * blend, transform.right);
         spine.rotation = torso * spine.rotation;
         var armSpan = Vector3.Distance(shoulder.position, elbow.position) + Vector3.Distance(elbow.position, hand.position);
         var drop = Mathf.Clamp((shoulder.position.y - surface.y - .91f * armSpan) * .57f, .025f, .32f * armSpan);
-        var advance = Mathf.Lerp(.18f, .12f, height) * (.55f + .45f * reach);
+        var advance = Mathf.Lerp(.18f, .12f, height) * (.38f + .48f * reach);
         stance.Shift((transform.forward * advance - Vector3.up * drop) * blend, transform.forward, transform.right);
         if (head != null)
         {
@@ -164,21 +171,26 @@ internal sealed class FeatherDuster : MonoBehaviour
             var nod = Quaternion.FromToRotation(torso * transform.forward, gaze);
             head.rotation = Quaternion.RotateTowards(Quaternion.identity, nod, 25f * blend) * head.rotation;
         }
-        // Let the free hand rest beside the apron, away from the working hand.
         if (freeArm != null && freeElbow != null && freeHand != null)
         {
             freeArmRest = freeArm.localRotation;
             freeElbowRest = freeElbow.localRotation;
-            var width = Vector3.Distance(freeArm.position, shoulder.position);
-            var apron = spine.position - transform.right * (.85f * width) + transform.forward * .24f;
-            Aim(freeArm, freeElbow.position, -transform.up - transform.right * .55f - transform.forward * .30f, blend);
-            Aim(freeElbow, freeHand.position, apron - freeElbow.position, blend);
+            freeHandRest = freeHand.localRotation;
+            if (freeThigh != null && freeIndex != null && freeLittle != null)
+            {
+                // Rest the spare hand against the apron at the outside of the thigh.
+                var width = Vector3.Distance(freeArm.position, shoulder.position);
+                var rest = freeThigh.position + width * (-transform.right * .48f
+                    + transform.forward * .38f - transform.up * .15f);
+                DustingStance.Reach(freeArm, freeElbow, freeHand.position, rest,
+                    -transform.right - transform.forward * .45f, blend);
+                var knuckles = (freeIndex.position + freeLittle.position) * .5f - freeHand.position;
+                var dorsal = Vector3.Cross(knuckles, freeIndex.position - freeLittle.position);
+                var restRotation = Quaternion.LookRotation(-transform.up + transform.forward * .20f, -transform.right)
+                    * Quaternion.Inverse(Quaternion.LookRotation(knuckles, dorsal)) * freeHand.rotation;
+                freeHand.rotation = Quaternion.Slerp(freeHand.rotation, restRotation, blend);
+            }
         }
     }
 
-    private static void Aim(Transform joint, Vector3 end, Vector3 direction, float blend)
-    {
-        var rotation = Quaternion.FromToRotation(end - joint.position, direction);
-        joint.rotation = Quaternion.Slerp(Quaternion.identity, rotation, blend) * joint.rotation;
-    }
 }

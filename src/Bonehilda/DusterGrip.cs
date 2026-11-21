@@ -8,21 +8,19 @@ internal sealed class DusterGrip
     internal Transform Socket { get; }
     private readonly Transform palm;
     private readonly Vector3 backOfHand;
-    private readonly List<FingerJoint> fingers = new List<FingerJoint>(12);
-    private readonly Transform thumb;
-    private Quaternion thumbRest;
+    private readonly List<FingerJoint> fingers = new List<FingerJoint>(15);
 
     private sealed class FingerJoint
     {
         internal readonly Transform Bone, Tip;
-        internal readonly float Flex;
+        internal readonly Vector3 Direction;
         internal Quaternion Rest;
 
-        internal FingerJoint(Transform bone, Transform tip, float flex)
+        internal FingerJoint(Transform bone, Transform tip, Vector3 direction)
         {
             Bone = bone;
             Tip = tip;
-            Flex = flex;
+            Direction = direction;
         }
     }
 
@@ -41,50 +39,48 @@ internal sealed class DusterGrip
         }
         Socket = Visuals.Child(palm, "BH_DusterGrip");
         // The ferrule leads past the index finger. The tail crosses the heel of the palm.
-        Socket.localPosition = new Vector3(.018f, .003f, .017f);
-        Socket.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(.64f, .92f, 1f));
-        thumb = animator.GetBoneTransform(HumanBodyBones.RightThumbProximal);
-        AddFinger(animator, HumanBodyBones.RightIndexProximal, -10f, -100f, -150f);
-        AddFinger(animator, HumanBodyBones.RightMiddleProximal, -46f, -130f, -147f);
-        AddFinger(animator, HumanBodyBones.RightRingProximal, -43f, -127f, -141f);
-        AddFinger(animator, HumanBodyBones.RightLittleProximal, -40f, -71f, -127f);
+        Socket.localPosition = new Vector3(.024f, .001f, .009f);
+        Socket.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(.86f, .44f, .65f));
+        // Directions in the equipment socket frame, fitted around the tapered ash shaft.
+        // The thumb lies along the grip. The other distal phalanges curl back underneath.
+        AddFinger(animator, HumanBodyBones.RightThumbProximal,
+            new Vector3(.995f, .073f, -.069f), new Vector3(.998f, -.040f, .038f), new Vector3(.780f, -.254f, .572f));
+        AddFinger(animator, HumanBodyBones.RightIndexProximal,
+            new Vector3(.934f, -.277f, -.226f), new Vector3(.227f, -.971f, -.079f), new Vector3(-.948f, -.318f, .022f));
+        AddFinger(animator, HumanBodyBones.RightMiddleProximal,
+            new Vector3(.810f, -.530f, .252f), new Vector3(-.615f, -.777f, .131f), new Vector3(-.952f, -.087f, -.294f));
+        AddFinger(animator, HumanBodyBones.RightRingProximal,
+            new Vector3(.783f, -.374f, .496f), new Vector3(-.628f, -.746f, .221f), new Vector3(-.952f, -.182f, -.247f));
+        AddFinger(animator, HumanBodyBones.RightLittleProximal,
+            new Vector3(.982f, .129f, .140f), new Vector3(-.218f, -.948f, .230f), new Vector3(-.819f, -.540f, -.195f));
     }
 
-    private void AddFinger(Animator animator, HumanBodyBones finger, params float[] flex)
+    private void AddFinger(Animator animator, HumanBodyBones finger, params Vector3[] directions)
     {
         var bone = animator.GetBoneTransform(finger);
-        foreach (var angle in flex)
+        foreach (var direction in directions)
         {
             if (!bone || bone.childCount == 0) break;
             var next = bone.GetChild(0);
-            fingers.Add(new FingerJoint(bone, next, angle));
+            fingers.Add(new FingerJoint(bone, next, direction));
             bone = next;
         }
     }
 
     internal Vector3 Dorsal => palm.TransformDirection(backOfHand);
 
-    internal void CloseFingers(float blend)
+    internal void CloseFingers()
     {
-        // Flex in the knuckle plane only. Preserve the avatar's finger spacing and twist.
         foreach (var joint in fingers)
         {
             joint.Rest = joint.Bone.localRotation;
-            var segment = Vector3.ProjectOnPlane(joint.Tip.position - joint.Bone.position, palm.forward);
-            var angle = Vector3.SignedAngle(palm.right, segment, palm.forward);
-            var bend = Mathf.DeltaAngle(angle, joint.Flex);
-            joint.Bone.rotation = Quaternion.AngleAxis(bend * blend, palm.forward) * joint.Bone.rotation;
-        }
-        if (thumb)
-        {
-            thumbRest = thumb.localRotation;
-            thumb.rotation = Quaternion.AngleAxis(19f * blend, palm.up) * thumb.rotation;
+            joint.Bone.rotation = Quaternion.FromToRotation(joint.Tip.position - joint.Bone.position,
+                palm.TransformDirection(joint.Direction)) * joint.Bone.rotation;
         }
     }
 
     internal void Restore()
     {
         foreach (var joint in fingers) joint.Bone.localRotation = joint.Rest;
-        if (thumb) thumb.localRotation = thumbRest;
     }
 }

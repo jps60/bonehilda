@@ -64,7 +64,7 @@ internal sealed class FeatherDust
         if (turn == lastTurn) return;
         lastTurn = turn;
         if (turn % 3 != 1 || Mathf.Abs(brush.y - surface.y) > .14f
-            || Vector3.ProjectOnPlane(brush - surface, Vector3.up).sqrMagnitude > .13f) return;
+            || Vector3.ProjectOnPlane(brush - surface, Vector3.up).sqrMagnitude > .25f) return;
         var origin = new Vector3(brush.x, surface.y + .055f, brush.z);
         for (var i = 0; i < 5; i++)
         {
