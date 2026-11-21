@@ -83,6 +83,7 @@ internal sealed class Housekeeping
             data.Set(FeatherDuster.SurfaceKey, left);
             data.Set(FeatherDuster.SideKey, side);
             data.Set(FeatherDuster.FarKey, far);
+            DustingRoutine.Choose(data);
             data.Set(FeatherDuster.StartKey, ZNet.instance.GetTime().Ticks);
             sweeping = true;
             deadline = Time.time + FeatherDuster.Seconds;

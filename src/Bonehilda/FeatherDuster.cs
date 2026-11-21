@@ -12,8 +12,7 @@ internal sealed class FeatherDuster : MonoBehaviour
     internal const string SideKey = "BH_dustSide";
     internal const string FarKey = "BH_dustFar";
     private const float Settle = .42f;
-    private const float Cycle = 1.45f;
-    internal const float Seconds = Settle + 2f * Cycle + .40f;
+    internal const float Seconds = Settle + DustingRoutine.WorkingSeconds + .40f;
     // A deliberate reach, a short turn, then a quicker gathering stroke.
     private static readonly AnimationCurve Travel = new AnimationCurve(
         new Keyframe(0f, 0f, 0f, 0f), new Keyframe(.26f, .49f, 2.6f, 2.6f),
@@ -110,17 +109,18 @@ internal sealed class FeatherDuster : MonoBehaviour
         handRest = hand.localRotation;
         posed = true;
         var blend = Mathf.SmoothStep(0f, 1f, Mathf.Min(elapsed / .50f, (Seconds - elapsed) / .42f));
-        var cycles = Mathf.Clamp((elapsed - Settle) / Cycle, 0f, 2f);
-        var phase = Mathf.Repeat(cycles, 1f);
-        var travel = Travel.Evaluate(phase);
         var surface = data.GetVec3(SurfaceKey, transform.position);
         var side = data.GetVec3(SideKey, surface + transform.right * .40f);
         var far = data.GetVec3(FarKey, surface + transform.forward * .25f);
-        var stroke = (cycles < 1f ? side : far) - surface;
+        var motion = DustingRoutine.At(data, elapsed - Settle, side - surface, far - surface);
+        var cycles = motion.Cycles;
+        var phase = Mathf.Repeat(cycles, 1f);
+        var travel = Travel.Evaluate(phase);
+        var stroke = motion.Span;
         var strokePoint = surface + travel * stroke;
         var height = Mathf.InverseLerp(.45f, 1.10f, surface.y - transform.position.y);
         var across = Mathf.Clamp(Vector3.Dot(strokePoint - (surface + side) * .5f, transform.right) * 3f, -1f, 1f);
-        var reach = cycles < 1f ? .55f - .20f * across : .55f - .20f * across + travel * .30f;
+        var reach = .55f - .20f * across + (motion.Forward ? .30f * travel : 0f);
         var restingBrush = DusterPlume.Contact(tool, plume);
         PoseBody(spine, shoulder, elbow, hand, stance, surface, strokePoint, height, across, reach, blend);
         grip.CloseFingers();
