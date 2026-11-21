@@ -537,7 +537,7 @@ public sealed class Maid : MonoBehaviour
                 .FirstOrDefault();
             if (candidate.Supply == null)
             {
-                if (Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage())) candidate.Wear = wear;
+                if (Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage()) && HasRepairStation(piece)) candidate.Wear = wear;
                 else continue;
             }
             var distance = (piece.transform.position - transform.position).sqrMagnitude;
@@ -555,8 +555,11 @@ public sealed class Maid : MonoBehaviour
         && candidate.Piece.IsPlacedByPlayer()
         && MaintenancePolicy.InRadius((candidate.Piece.transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
         && Allowed(candidate.Piece.transform.position, home.Piece.GetCreator())
-        && ((candidate.Wear && Plugin.Repair.Value && MaintenancePolicy.NeedsRepair(candidate.Wear!.GetHealthPercentage()))
+        && ((candidate.Wear && Plugin.Repair.Value && MaintenancePolicy.NeedsRepair(candidate.Wear!.GetHealthPercentage()) && HasRepairStation(candidate.Piece))
             || (candidate.Supply != null && Enabled(candidate.Supply) && candidate.Supply.NeedsItem));
+
+    internal bool HasRepairStation(Piece piece) => !piece.m_craftingStation
+        || CraftingStation.HaveBuildStationInRange(piece.m_craftingStation.m_name, transform.position);
 
     private static bool Enabled(SupplyTarget target) => target.Kind == SupplyTarget.SupplyKind.FireplaceFuel
         ? Plugin.Refuel.Value : Plugin.SupplyMachines.Value;
