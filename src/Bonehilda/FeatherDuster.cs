@@ -121,11 +121,12 @@ internal sealed class FeatherDuster : MonoBehaviour
             Aim(freeArm, freeElbow.position, -transform.up - transform.right * .55f - transform.forward * .30f, blend);
             Aim(freeElbow, freeHand.position, apron - freeElbow.position, blend);
         }
-        grip.Pose(elbow, hand, transform.up + transform.right * .25f, Mathf.Cos(phase - .20f), blend);
+        grip.Pose(elbow, hand, Mathf.Cos(phase - .20f), blend);
         var brush = tool.TransformPoint(Vector3.up * DusterPlume.Tip);
         SweepArm(shoulder, elbow, brush, tip, blend);
         // Account for feather deflection so the loaded stroke keeps skimming the surface.
         var plannedTip = tool.TransformPoint(Vector3.up * DusterPlume.Tip);
+        grip.Pronate(elbow, plannedTip, blend);
         DusterPlume.Bend(plume, tool, transform.right, Mathf.Cos(phase - .22f), 1f - recovery, blend);
         SweepArm(shoulder, elbow, DusterPlume.End(plume), plannedTip, blend);
         dust?.Sweep(start, cycles, DusterPlume.End(plume), surface, transform.right);
