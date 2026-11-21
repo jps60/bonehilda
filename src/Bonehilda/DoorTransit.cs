@@ -1,0 +1,211 @@
+using System;
+using System.Linq;
+using HarmonyLib;
+using UnityEngine;
+
+namespace Bonehilda;
+
+internal sealed class DoorTransit
+{
+    private const string PendingKey = "BH_openDoor", StageKey = "BH_doorStage", StartKey = "BH_doorStart";
+    private const string FromKey = "BH_doorFrom", ExitKey = "BH_doorExit", FailedKey = "BH_doorFailed";
+    private const string MaidKey = "BH_doorMaid", LeaseKey = "BH_doorLease";
+    private static readonly System.Reflection.MethodInfo CanUse = AccessTools.Method(typeof(Door), "CanInteract");
+    private float nextCheck;
+    private bool blocked;
+
+    internal string Describe(Maid maid)
+    {
+        var data = maid.View.GetZDO();
+        return data.GetZDOID(PendingKey) == ZDOID.None ? "none" : data.GetZDOID(PendingKey) + " " + data.GetString(StageKey);
+    }
+
+    internal bool TryBegin(Maid maid, MonsterAI ai, Vector3 goal)
+    {
+        if (!Plugin.UseDoors.Value) return false;
+        if (maid.View.GetZDO().GetZDOID(PendingKey) != ZDOID.None) return true;
+        if (Time.time < nextCheck) return blocked;
+        nextCheck = Time.time + .2f; blocked = false;
+        var point = goal;
+        if (ai.m_path.Count > 0 && (ai.m_path[0] - maid.transform.position).sqrMagnitude > .1f) point = ai.m_path[0];
+        var direction = point - maid.transform.position; direction.y = 0;
+        if (direction.sqrMagnitude < .04f) return false;
+        foreach (var hit in Physics.SphereCastAll(maid.transform.position + Vector3.up * .8f, .22f,
+                     direction.normalized, Mathf.Min(2.8f, direction.magnitude), LayerMask.GetMask("piece", "piece_nonsolid", "static_solid"), QueryTriggerInteraction.Ignore).OrderBy(h => h.distance))
+        {
+            var door = hit.collider.GetComponentInParent<Door>();
+            // A wall in front of a door is not a route through that door.
+            if (!door) return false;
+            var view = door.GetComponent<ZNetView>();
+            if (!view || !view.IsValid() || State(view) != 0) continue;
+            blocked = true;
+            var piece = door.GetComponentInParent<Piece>();
+            var homeObject = ZNetScene.instance.FindInstance(maid.View.GetZDO().GetZDOID(Maid.HomeKey));
+            var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
+            if (!piece || !piece.IsPlacedByPlayer() || !home || door.m_keyItem || door.m_canNotBeClosed
+                || !Maid.Allowed(door.transform.position, home!.Piece.GetCreator()) || !Usable(door)
+                || EnemiesNear(maid.GetComponent<Character>(), door.transform.position, maid.transform.position)) return true;
+            var leased = view.GetZDO().GetZDOID(MaidKey);
+            if (leased != ZDOID.None && leased != maid.View.GetZDO().m_uid && view.GetZDO().GetLong(LeaseKey) > Now) return true;
+            Geometry(door, out var center, out var normal, out var clearance);
+            var side = Vector3.Dot(maid.transform.position - center, normal) >= 0 ? 1f : -1f;
+            var from = center + normal * side * (clearance + .6f);
+            var exit = center - normal * side * (clearance + .6f);
+            if (!IdleActivities.Floor(from, maid.transform.position.y, out from)
+                || !IdleActivities.Floor(exit, maid.transform.position.y, out exit)) return true;
+            if (!view.IsOwner()) view.ClaimOwnership();
+            if (!view.IsOwner() || State(view) != 0 || EnemiesNear(maid.GetComponent<Character>(), center, maid.transform.position)) return true;
+            var data = maid.View.GetZDO();
+            data.Set(PendingKey, view.GetZDO().m_uid); data.Set(StageKey, "opening"); data.Set(StartKey, Now);
+            data.Set(FromKey, from); data.Set(ExitKey, exit); data.Set(FailedKey, false);
+            view.GetZDO().Set(MaidKey, data.m_uid);
+            Refresh(view);
+            maid.StopNavigation(); ai.StopMoving();
+            maid.GetComponent<WorkAnimations>().Interact();
+            view.InvokeRPC("UseDoor", Vector3.Dot(door.transform.forward, maid.transform.position - door.transform.position) < 0);
+            return true;
+        }
+        return false;
+    }
+
+    internal bool Tick(Maid maid, MonsterAI ai, float delta)
+    {
+        var data = maid.View.GetZDO();
+        var id = data.GetZDOID(PendingKey);
+        if (id == ZDOID.None) return false;
+        var instance = ZNetScene.instance.FindInstance(id);
+        var door = instance ? instance.GetComponent<Door>() : null;
+        if (!door) { Finish(maid, false); return false; }
+        var view = door!.GetComponent<ZNetView>();
+        if (!view || !view.IsValid()) { Finish(maid, false); return false; }
+        if (!view.IsOwner()) view.ClaimOwnership();
+        if (!view.IsOwner()) { ai.StopMoving(); return true; }
+        Refresh(view);
+        var stage = data.GetString(StageKey);
+        var elapsed = (Now - data.GetLong(StartKey)) / (double)TimeSpan.TicksPerSecond;
+        if (State(view) == 0)
+        {
+            ai.StopMoving();
+            if (!Usable(door) || (stage == "opening" && elapsed < 3)) return true;
+            Finish(maid, data.GetBool(FailedKey));
+            return false;
+        }
+        if (stage == "opening")
+        {
+            ai.StopMoving();
+            if (!Usable(door)) return true;
+            data.Set(StageKey, "crossing"); data.Set(StartKey, Now); stage = "crossing";
+            elapsed = 0;
+            ai.m_path.Clear(); ai.m_lastFindPathTime = -100f;
+        }
+        if (stage == "crossing" && (elapsed > 10 || EnemiesNear(maid.GetComponent<Character>(), door.transform.position, maid.transform.position)))
+        {
+            var from = data.GetVec3(FromKey, maid.transform.position); var exit = data.GetVec3(ExitKey, maid.transform.position);
+            data.Set(ExitKey, (maid.transform.position - from).sqrMagnitude < (maid.transform.position - exit).sqrMagnitude ? from : exit);
+            data.Set(StageKey, "retreating"); data.Set(StartKey, Now); data.Set(FailedKey, true); stage = "retreating";
+            elapsed = 0;
+        }
+        // A blocked retreat must not leave a gate open indefinitely. Close even
+        // if a character (including this maid) still occupies the doorway.
+        if (stage == "retreating" && DoorPolicy.RetreatExpired(elapsed))
+        {
+            data.Set(StageKey, "closing"); stage = "closing";
+        }
+        if (stage == "crossing" || stage == "retreating")
+        {
+            var target = data.GetVec3(ExitKey, maid.transform.position);
+            var offset = target - maid.transform.position; offset.y = 0;
+            if (offset.magnitude > .25f)
+            {
+                var clear = ClearWalk(maid.transform.position, target);
+                if (clear) ai.MoveTowards(offset, false); else ai.MoveTo(delta, target, .3f, false);
+                return true;
+            }
+            ai.StopMoving(); data.Set(StageKey, "closing"); stage = "closing";
+        }
+        ai.StopMoving(); maid.StopNavigation(); ai.LookAt(door.transform.position);
+        if (Usable(door) && State(view) != 0)
+        {
+            maid.GetComponent<WorkAnimations>().Interact();
+            view.InvokeRPC("UseDoor", false);
+        }
+        return true;
+    }
+
+    private static long Now => ZNet.instance.GetTime().Ticks;
+    private static int State(ZNetView view) => view.GetZDO().GetInt("state");
+    private static bool Usable(Door door) => (bool)CanUse.Invoke(door, null);
+    private static void Refresh(ZNetView view)
+    {
+        if (view.IsOwner() && view.GetZDO().GetLong(LeaseKey) < Now + 10L * TimeSpan.TicksPerSecond)
+            view.GetZDO().Set(LeaseKey, Now + 15L * TimeSpan.TicksPerSecond);
+    }
+    private void Finish(Maid maid, bool failed)
+    {
+        maid.View.GetZDO().Set(PendingKey, ZDOID.None); maid.View.GetZDO().Set(StageKey, "");
+        blocked = false; nextCheck = 0;
+        maid.StopNavigation();
+        if (failed) maid.DoorApproachFailed();
+    }
+
+    internal static bool EnemiesNear(Character maid, Vector3 door, Vector3 feet)
+    {
+        foreach (var other in Character.GetAllCharacters())
+            if (other && !other.IsDead() && DoorPolicy.EnemyNear((other.transform.position - door).sqrMagnitude,
+                    (other.transform.position - feet).sqrMagnitude, Plugin.DoorEnemyRadius.Value) && BaseAI.IsEnemy(maid, other)) return true;
+        return false;
+    }
+
+    private static void Geometry(Door door, out Vector3 center, out Vector3 normal, out float clearance)
+    {
+        var colliders = door.GetComponentsInChildren<Collider>().Where(c => c.enabled && !c.isTrigger).ToArray();
+        var bounds = colliders.Length == 0 ? new Bounds(door.transform.position + Vector3.up, new Vector3(1, 2, .3f)) : colliders[0].bounds;
+        foreach (var collider in colliders.Skip(1)) bounds.Encapsulate(collider.bounds);
+        center = bounds.center; normal = door.transform.forward; normal.y = 0; normal.Normalize();
+        var right = Vector3.Cross(Vector3.up, normal);
+        var halfWidth = Vector3.Dot(bounds.extents, new Vector3(Mathf.Abs(right.x), 0, Mathf.Abs(right.z)));
+        clearance = Mathf.Clamp(halfWidth + .6f, 1.4f, 3f);
+    }
+
+    private static bool ClearWalk(Vector3 from, Vector3 to)
+    {
+        if (!IdleActivities.Floor((from + to) * .5f, from.y, out _)) return false;
+        var offset = to - from;
+        return !Physics.SphereCast(from + Vector3.up * .8f, .25f, offset.normalized, out _, offset.magnitude,
+            LayerMask.GetMask("piece", "terrain", "static_solid"), QueryTriggerInteraction.Ignore);
+    }
+
+    internal static void Watch(Door door)
+    {
+        var view = door.GetComponent<ZNetView>();
+        if (!view || !view.IsValid() || view.GetZDO().GetZDOID(MaidKey) == ZDOID.None) return;
+        if (State(view) == 0 && Usable(door))
+        {
+            if (view.IsOwner()) view.GetZDO().Set(MaidKey, ZDOID.None);
+            return;
+        }
+        if (view.GetZDO().GetLong(LeaseKey) > Now || !Usable(door)) return;
+        if (!view.IsOwner()) view.ClaimOwnership();
+        if (view.IsOwner() && State(view) != 0) view.InvokeRPC("UseDoor", false);
+    }
+}
+
+internal sealed class MaidDoorWatch : MonoBehaviour
+{
+    private float nextCheck;
+    private void Update()
+    {
+        if (Time.time < nextCheck) return;
+        nextCheck = Time.time + 1f;
+        DoorTransit.Watch(GetComponent<Door>());
+    }
+}
+
+[HarmonyPatch(typeof(Door), "Awake")]
+internal static class MaidDoorWatchPatch
+{
+    private static void Postfix(Door __instance)
+    {
+        if (!__instance.GetComponent<MaidDoorWatch>()) __instance.gameObject.AddComponent<MaidDoorWatch>();
+    }
+}

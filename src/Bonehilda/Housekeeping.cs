@@ -13,6 +13,7 @@ internal sealed class Housekeeping
     private bool sweeping;
     private bool attempted;
     internal bool Performed { get; private set; }
+    internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + target.transform.position.ToString("F2") + (sweeping ? " dusting" : " approaching") : "none";
 
     internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces)
     {

@@ -11,6 +11,7 @@ internal sealed class ChairVisits
     private float nextRoll;
     private bool sitting;
     internal bool Performed { get; private set; }
+    internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + approach.ToString("F2") + (sitting ? " seated" : " approaching") : "none";
 
     internal bool TryBegin(Maid maid, Coffin home, List<Piece> pieces)
     {

@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.8";
+    public const string Version = "0.4.9";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -42,6 +42,9 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> IdleSitting = null!;
     internal static ConfigEntry<float> SittingCheckInterval = null!;
     internal static ConfigEntry<float> SittingContinueChance = null!;
+    internal static ConfigEntry<bool> UseDoors = null!;
+    internal static ConfigEntry<float> DoorEnemyRadius = null!;
+    internal static ConfigEntry<bool> ActivityLogging = null!;
     internal static HashSet<string> LegacySkeletonNames = new HashSet<string>(StringComparer.Ordinal);
     private Harmony harmony = null!;
     private bool registered;
@@ -74,6 +77,12 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         SittingCheckInterval = Setting("Maid", "SittingCheckInterval", 10f, "Seconds between rolls to leave an idle chair.", 5f, 120f);
         SittingContinueChance = Setting("Maid", "SittingContinueChance", .6f, "Probability of continuing to sit at each check. 0.6 means 60% stay, 40% get up.", 0f, .95f);
+        UseDoors = Config.Bind("Maid", "UseDoors", true, new ConfigDescription("Open permitted player-built doors and gates while travelling, then prioritize closing them. Locked and permanently open doors are excluded.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);
+        ActivityLogging = Config.Bind("Debugging", "ActivityLogging", false, "Write loaded maid activity, target, path, and cargo snapshots every two seconds to Bonehilda.activity.json and a bounded history log. Local diagnostics only.");
+        gameObject.AddComponent<ActivityDiagnostics>();
+        CommandManager.Instance.AddConsoleCommand(new ActivityCommand());
         harmony = new Harmony(Guid);
         harmony.PatchAll();
         PrefabManager.OnVanillaPrefabsAvailable += Register;

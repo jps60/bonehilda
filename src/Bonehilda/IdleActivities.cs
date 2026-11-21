@@ -11,6 +11,8 @@ internal sealed class IdleActivities
     private readonly TrophyVisits trophy = new TrophyVisits();
     private readonly ChairVisits chair = new ChairVisits();
     private int active;
+    internal string Describe => active == IdleDeck.Dust ? "dust: " + dust.Describe
+        : active == IdleDeck.Trophy ? "trophy: " + trophy.Describe : active == IdleDeck.Sit ? "chair: " + chair.Describe : "wandering / cooldown";
 
     internal bool Tick(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces, float delta)
     {

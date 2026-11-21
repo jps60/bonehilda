@@ -5,6 +5,7 @@ namespace Bonehilda;
 internal sealed class RepairRetries
 {
     private int retries;
+    internal int Count => retries;
     internal void Reset() => retries = 0;
     internal bool TryAgain()
     {

@@ -9,6 +9,7 @@ namespace Bonehilda;
 
 public sealed class Maid : MonoBehaviour
 {
+    internal static readonly HashSet<Maid> Loaded = new HashSet<Maid>();
     internal const string HomeKey = "BH_home";
     internal const string ExitingKey = "BH_exiting";
     internal const string ReturningKey = "BH_returning";
@@ -40,9 +41,11 @@ public sealed class Maid : MonoBehaviour
     private Vector3 recoveryPoint, recoveryGoal;
     private float recoveryUntil;
     private int recoveryAttempts;
+    private Vector3 navigationGoal;
     private readonly RepairRetries repairRetries = new RepairRetries();
     private bool repairRouteFailed;
     private readonly IdleActivities idle = new IdleActivities();
+    private readonly DoorTransit doors = new DoorTransit();
     private WorkPhase phase;
     private float phaseEnds;
     private int dressLevel = -1;
@@ -55,6 +58,8 @@ public sealed class Maid : MonoBehaviour
         internal Collider Cabinet = null!;
     }
     private enum WorkPhase { None, Drawing, Repairing, Recovering, Holstering, Supplying, FinishingSupply }
+    private void OnEnable() => Loaded.Add(this);
+    private void OnDisable() => Loaded.Remove(this);
 
     private sealed class Job
     {
@@ -199,6 +204,8 @@ public sealed class Maid : MonoBehaviour
         ClearCombatState();
         EnsureDefaultName();
         LoadCargo();
+        // Finish a door she opened before resuming work, idle, or dismissal.
+        if (doors.Tick(this, ai, Time.deltaTime)) return;
         var homeId = View.GetZDO().GetZDOID(HomeKey);
         if (homeId == ZDOID.None) { SetCoffinPassage(null); CancelJob(); return; }
         var homeObject = ZNetScene.instance.FindInstance(homeId);
@@ -307,6 +314,7 @@ public sealed class Maid : MonoBehaviour
                 // Our AI patch skips BaseAI.UpdateAI, which normally advances the wander timer.
                 ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
                 ai.RandomMovement(delta, home.transform.position, false);
+                if (doors.TryBegin(this, ai, ai.m_randomMoveTarget)) ai.StopMoving();
             }
             else
             {
@@ -598,6 +606,9 @@ public sealed class Maid : MonoBehaviour
 
     internal void Navigate(Vector3 point, float dt, float stoppingDistance, bool direct = false, Coffin? passage = null)
     {
+        navigationGoal = point;
+        var doorBlocked = doors.TryBegin(this, ai, point);
+        if (View.GetZDO().GetZDOID("BH_openDoor") != ZDOID.None) return;
         var feet = transform.position;
         if (recoveringRoute && (point - recoveryGoal).sqrMagnitude > 1f) StopNavigation();
         if (recoveringRoute)
@@ -642,6 +653,7 @@ public sealed class Maid : MonoBehaviour
                 return;
             }
         }
+        if (doorBlocked) { ai.StopMoving(); return; }
         if (direct)
         {
             var direction = point - feet; direction.y = 0;
@@ -821,10 +833,48 @@ public sealed class Maid : MonoBehaviour
         repairRouteFailed = false;
     }
 
+    internal void DoorApproachFailed()
+    {
+        if (job != null && job.Wear) repairRouteFailed = true;
+        else if (job != null) jobStarted = Time.time - Plugin.JobTimeout.Value - 1f;
+    }
+
     private void SkipCurrentJob()
     {
         if (job != null && job.View && job.View.IsValid())
             skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(10f, Plugin.ScanInterval.Value * 2f);
+    }
+
+    internal MaidActivity ReadActivity()
+    {
+        var data = View.GetZDO();
+        var state = new MaidActivity { id = data.m_uid.ToString(), name = data.GetString("TamedName", "Bonehilda"),
+            localOwner = View.IsOwner(), stars = character.GetLevel() - 1, position = transform.position, phase = phase.ToString(),
+            alerted = ai.IsAlerted(), hasCargo = HasCargo, cargo = string.Join(", ", cargo.GetAllItems().Select(i => Utils.GetPrefabName(i.m_dropPrefab) + " x" + i.m_stack)),
+            activity = data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle" : job.Wear ? "repair" : "supply",
+            jobAge = job == null ? 0 : Time.time - jobStarted, pathNodes = ai.m_path.Count, repairRetries = repairRetries.Count, skippedJobs = skipped.Count,
+            navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
+            door = doors.Describe(this),
+            homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
+            idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
+        var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));
+        var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
+        state.homeLoaded = home;
+        state.chestInUse = home && home!.Chest.IsInUse();
+        if (job != null && job.Piece)
+        {
+            state.target = Utils.GetPrefabName(job.Piece.gameObject);
+            state.targetId = job.View && job.View.IsValid() ? job.View.GetZDO().m_uid.ToString() : "unloaded";
+            state.targetPosition = job.Piece.transform.position;
+            state.targetDistance = Vector3.Distance(transform.position, state.targetPosition);
+            state.workPoint = job.Wear ? RepairPoint(job.Piece) : job.Supply?.Port ? job.Supply!.Port!.position : WorkPoint(job.Piece);
+            state.interactionDistance = Vector3.Distance(job.Wear ? character.GetEyePoint() : transform.position, state.workPoint);
+            state.inReach = job.Wear ? WithinRepairReach(job.Piece, state.workPoint) : WithinWorkReach(job.Piece, state.workPoint);
+            state.station = job.Piece.m_craftingStation ? job.Piece.m_craftingStation.m_name : "none";
+            state.hasStation = HasRepairStation(job.Piece);
+            state.targetNeedsItem = job.Supply != null && job.Supply.NeedsItem;
+        }
+        return state;
     }
 
     private void LoadCargo()

@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Bonehilda/DoorPolicy.cs" Link="DoorPolicy.cs" />
     <Compile Include="../../src/Bonehilda/IdleTiming.cs" Link="IdleTiming.cs" />
     <Compile Include="../../src/Bonehilda/RepairRetries.cs" Link="RepairRetries.cs" />
     <Compile Include="../../src/Bonehilda/CoffinRecipes.cs" Link="CoffinRecipes.cs" />

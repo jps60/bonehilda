@@ -15,6 +15,7 @@ internal sealed class TrophyVisits
     private float deadline;
     private bool reacting;
     internal bool Performed { get; private set; }
+    internal string Describe => target ? item + " " + standingPoint.ToString("F2") + (reacting ? " emoting" : " approaching") : "none";
 
     internal static void Configure()
     {
