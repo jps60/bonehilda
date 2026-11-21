@@ -15,6 +15,9 @@ internal sealed class MaidActivity
     public bool localOwner, alerted, hasCargo, hasStation, inReach, targetNeedsItem, recovering, homeLoaded, chestInUse;
     public Vector3 position, targetPosition, workPoint, navigationGoal, recoveryPoint, homePosition;
     public float jobAge, targetDistance, interactionDistance, actionDelay, idleDelay;
+    public string repairApproach = "";
+    public Vector3 repairStandingPoint, repairSightPoint;
+    public int repairProbes;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour

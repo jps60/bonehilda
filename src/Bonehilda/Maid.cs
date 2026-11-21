@@ -44,6 +44,7 @@ public sealed class Maid : MonoBehaviour
     private int recoveryAttempts;
     private Vector3 navigationGoal;
     private readonly RepairRetries repairRetries = new RepairRetries();
+    private readonly RepairApproach repairApproach = new RepairApproach();
     private bool repairRouteFailed;
     private readonly IdleActivities idle = new IdleActivities();
     private readonly DoorTransit doors = new DoorTransit();
@@ -573,8 +574,9 @@ public sealed class Maid : MonoBehaviour
         && ((candidate.Wear && Plugin.Repair.Value && MaintenancePolicy.NeedsRepair(candidate.Wear!.GetHealthPercentage()) && HasRepairStation(candidate.Piece))
             || (candidate.Supply != null && Enabled(candidate.Supply) && candidate.Supply.NeedsItem));
 
-    internal bool HasRepairStation(Piece piece) => !piece.m_craftingStation
-        || CraftingStation.HaveBuildStationInRange(piece.m_craftingStation.m_name, transform.position);
+    internal bool HasRepairStation(Piece piece) => HasRepairStation(piece, transform.position);
+    internal bool HasRepairStation(Piece piece, Vector3 position) => !piece.m_craftingStation
+        || CraftingStation.HaveBuildStationInRange(piece.m_craftingStation.m_name, position);
 
     private static bool Enabled(SupplyTarget target) => target.Kind == SupplyTarget.SupplyKind.FireplaceFuel
         ? Plugin.Refuel.Value : Plugin.SupplyMachines.Value;
@@ -600,6 +602,24 @@ public sealed class Maid : MonoBehaviour
             StopNavigation();
             ai.StopMoving();
             return true;
+        }
+        if (repairing)
+        {
+            var homeObject = ZNetScene.instance.FindInstance(View.GetZDO().GetZDOID(HomeKey));
+            var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
+            if (!home) return false;
+            var result = repairApproach.Tick(this, ai, home!, piece, out var standing);
+            if (result == RepairApproach.Result.Ready)
+            {
+                var offset = standing - transform.position; offset.y = 0;
+                Navigate(standing, dt, .25f, offset.magnitude < 1.2f && RepairGeometry.ClearLastStep(this, standing));
+            }
+            else
+            {
+                ai.StopMoving();
+                if (result == RepairApproach.Result.Failed) RetryRepairApproach();
+            }
+            return false;
         }
         Navigate(point, dt, 1.5f);
         return false;
@@ -638,16 +658,8 @@ public sealed class Maid : MonoBehaviour
         {
             if (job != null && job.Wear)
             {
-                if (!repairRetries.TryAgain())
-                {
-                    repairRouteFailed = true;
-                    StopNavigation();
-                    ai.StopMoving();
-                    return;
-                }
-                // Give each bounded retry its own approach timeout. The budget
-                // also counts failures to find a safe back-off point.
-                jobStarted = Time.time;
+                RetryRepairApproach();
+                return;
             }
             ResetPath();
             if (TryBackOff(point, passage))
@@ -735,41 +747,13 @@ public sealed class Maid : MonoBehaviour
         return point;
     }
 
-    private Vector3 RepairPoint(Piece piece)
-    {
-        var eye = character.GetEyePoint();
-        var point = piece.transform.position;
-        var distance = float.PositiveInfinity;
-        foreach (var collider in piece.GetComponentsInChildren<Collider>())
-        {
-            if (!collider.enabled || collider.isTrigger) continue;
-            Vector3 candidate;
-            if (collider is MeshCollider mesh && !mesh.convex)
-            {
-                // ClosestPoint does not support concave mesh colliders. Probe
-                // actual geometry so range is measured to a surface, like a player hit.
-                var direction = collider.bounds.ClosestPoint(eye) - eye;
-                if (direction.sqrMagnitude < .001f) direction = collider.bounds.center - eye;
-                if (!collider.Raycast(new Ray(eye, direction.normalized), out var hit, direction.magnitude + collider.bounds.size.magnitude + 1f))
-                {
-                    direction = collider.bounds.center - eye;
-                    if (!collider.Raycast(new Ray(eye, direction.normalized), out hit, direction.magnitude + collider.bounds.size.magnitude + 1f)) continue;
-                }
-                candidate = hit.point;
-            }
-            else candidate = collider.ClosestPoint(eye);
-            var d = (candidate - eye).sqrMagnitude;
-            if (d >= distance) continue;
-            point = candidate; distance = d;
-        }
-        return point;
-    }
+    private Vector3 RepairPoint(Piece piece) => RepairGeometry.Aim(piece, character.GetEyePoint());
 
     private bool WithinRepairReach(Piece piece, Vector3 point)
     {
         var eye = character.GetEyePoint();
         if (!MaintenancePolicy.InRepairReach((point - eye).sqrMagnitude, Plugin.RepairReach)) return false;
-        return !Physics.Linecast(eye, point, out var hit, LayerMask.GetMask("piece", "terrain", "static_solid"), QueryTriggerInteraction.Ignore)
+        return !Physics.Linecast(eye, point, out var hit, RepairGeometry.SightMask, QueryTriggerInteraction.Ignore)
             || hit.collider.GetComponentInParent<Piece>() == piece;
     }
 
@@ -837,7 +821,16 @@ public sealed class Maid : MonoBehaviour
     private void ResetRepairRoute()
     {
         repairRetries.Reset();
+        repairApproach.Reset();
         repairRouteFailed = false;
+    }
+
+    private void RetryRepairApproach()
+    {
+        if (!repairRetries.TryAgain()) repairRouteFailed = true;
+        else jobStarted = Time.time;
+        repairApproach.Retry();
+        StopNavigation(); ResetPath(); ai.StopMoving();
     }
 
     internal void DoorApproachFailed()
@@ -864,6 +857,8 @@ public sealed class Maid : MonoBehaviour
             navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
             door = doors.Describe(this),
             reservation = TaskClaims.Describe(this),
+            repairApproach = repairApproach.State, repairStandingPoint = repairApproach.Position,
+            repairSightPoint = repairApproach.SightPoint, repairProbes = repairApproach.Probes,
             homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
             idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
         var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));

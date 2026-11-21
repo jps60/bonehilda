@@ -100,9 +100,29 @@ checks = checks.Concat(IdleChecks()).ToArray();
 checks = checks.Concat(ReservationChecks()).ToArray();
 checks = checks.Concat(SnapshotChecks()).ToArray();
 checks = checks.Concat(LinkChecks()).ToArray();
+checks = checks.Concat(ApproachChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> ApproachChecks()
+{
+    yield return ("a path ending on the requested floor qualifies", RepairApproachPolicy.EndpointMatches(.2f * .2f, .1f));
+    yield return ("a path snapped to another floor is rejected despite matching XZ", !RepairApproachPolicy.EndpointMatches(0, 2));
+    yield return ("a path stopped short of the standing spot is rejected", !RepairApproachPolicy.EndpointMatches(1, 0));
+    yield return ("small navmesh height and position offsets are tolerated", RepairApproachPolicy.EndpointMatches(.64f * .64f, .49f));
+    yield return ("a point below the requested floor is also rejected", !RepairApproachPolicy.EndpointMatches(0, -.51f));
+    yield return ("route length rather than straight-line proximity chooses a standing spot", RepairApproachPolicy.Cost(4, 0) < RepairApproachPolicy.Cost(18, 0));
+    yield return ("similar routes gently favor the current floor", RepairApproachPolicy.Cost(4, 0) < RepairApproachPolicy.Cost(4, 2));
+    yield return ("a shorter route can still use another floor", RepairApproachPolicy.Cost(4, 2) < RepairApproachPolicy.Cost(10, 0));
+    yield return ("an alternate point too close to a failed stance is rejected", RepairApproachPolicy.SameFailedSpot(.4f * .4f, .1f));
+    yield return ("a different floor is not the same failed stance", !RepairApproachPolicy.SameFailedSpot(0, 2));
+    yield return ("a stance around another corner can be tried", !RepairApproachPolicy.SameFailedSpot(1, 0));
+    var budget = new RepairRetries();
+    var attempts = 1;
+    while (budget.TryAgain()) attempts++;
+    yield return ("standing-spot changes share a total of three recovery retries", attempts == 4 && budget.Count == 3 && !budget.TryAgain());
+}
 
 static IEnumerable<(string Name, bool Passed)> LinkChecks()
 {
