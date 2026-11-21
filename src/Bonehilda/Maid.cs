@@ -36,6 +36,7 @@ public sealed class Maid : MonoBehaviour
     private float jobStarted;
     private float nextHomeCheck;
     private bool wasOwner;
+    private bool retiring;
     private readonly NavigationProgress navigation = new NavigationProgress();
     private bool recoveringRoute;
     private Vector3 recoveryPoint, recoveryGoal;
@@ -182,7 +183,7 @@ public sealed class Maid : MonoBehaviour
 
     private void Update()
     {
-        if (!View || !View.IsValid() || !View.IsOwner() || character.IsDead())
+        if (retiring || !View || !View.IsValid() || !View.IsOwner() || character.IsDead())
         {
             StopNavigation();
             SetCoffinPassage(null);
@@ -191,6 +192,7 @@ public sealed class Maid : MonoBehaviour
         }
         if (!wasOwner)
         {
+            nextHomeCheck = Time.time + 10f;
             TaskClaims.Release(this);
             StopNavigation();
             ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
@@ -206,20 +208,23 @@ public sealed class Maid : MonoBehaviour
         EnsureDefaultName();
         LoadCargo();
         TaskClaims.Refresh(this);
+        var homeId = View.GetZDO().GetZDOID(HomeKey);
+        // Validate every maid, including unbound legacy/spawned instances and
+        // those occupied with a door. Only the server knows unloaded links.
+        if (Time.time >= nextHomeCheck)
+        {
+            nextHomeCheck = Time.time + 10f;
+            ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.instance.GetServerPeerID(), Network.CheckRpc, View.GetZDO().m_uid, homeId);
+            if (retiring || !View || !View.IsValid()) return;
+        }
         // Finish a door she opened before resuming work, idle, or dismissal.
         if (doors.Tick(this, ai, Time.deltaTime)) return;
-        var homeId = View.GetZDO().GetZDOID(HomeKey);
         if (homeId == ZDOID.None) { SetCoffinPassage(null); CancelJob(); return; }
         var homeObject = ZNetScene.instance.FindInstance(homeId);
         if (!homeObject)
         {
             SetCoffinPassage(null);
             CancelJob();
-            if (Time.time >= nextHomeCheck)
-            {
-                nextHomeCheck = Time.time + 10f;
-                ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.instance.GetServerPeerID(), Network.CheckRpc, View.GetZDO().m_uid, homeId);
-            }
             return;
         }
         var home = homeObject.GetComponent<Coffin>();
@@ -229,12 +234,6 @@ public sealed class Maid : MonoBehaviour
         {
             SetCoffinPassage(null);
             CancelJob();
-            // The two ZDOs can arrive in different packets. Let the server confirm an orphan.
-            if (Time.time >= nextHomeCheck)
-            {
-                nextHomeCheck = Time.time + 10f;
-                ZRoutedRpc.instance.InvokeRoutedRPC(ZRoutedRpc.instance.GetServerPeerID(), Network.CheckRpc, View.GetZDO().m_uid, homeId);
-            }
             return;
         }
         var delta = Time.deltaTime;
@@ -915,9 +914,11 @@ public sealed class Maid : MonoBehaviour
 
     internal void Retire()
     {
-        if (!View.IsValid()) return;
+        if (retiring || !View.IsValid()) return;
         if (!View.IsOwner()) View.ClaimOwnership();
         if (!View.IsOwner()) return;
+        retiring = true;
+        TaskClaims.Release(this);
         DropCargo();
         ZNetScene.instance.Destroy(gameObject);
     }

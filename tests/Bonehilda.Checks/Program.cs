@@ -99,9 +99,38 @@ var checks = new (string Name, bool Passed)[]
 checks = checks.Concat(IdleChecks()).ToArray();
 checks = checks.Concat(ReservationChecks()).ToArray();
 checks = checks.Concat(SnapshotChecks()).ToArray();
+checks = checks.Concat(LinkChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> LinkChecks()
+{
+    long At(int seconds) => seconds * TimeSpan.TicksPerSecond;
+    var guard = new LinkConfirmation();
+    yield return ("a maid with no home gets time for initial binding", !guard.Confirm("unbound", "none", 1, false, At(10)));
+    yield return ("an unbound maid is confirmed orphaned on a later check", guard.Confirm("unbound", "none", 1, false, At(20)));
+    guard.Confirm("loading", "coffin", 1, false, At(10));
+    yield return ("a delayed reciprocal link cancels pending cleanup", !guard.Confirm("loading", "coffin", 1, true, At(14)));
+    yield return ("a subsequent break starts a fresh observation", !guard.Confirm("loading", "coffin", 1, false, At(30)));
+    yield return ("one bad packet cannot trigger immediate cleanup", !guard.Confirm("loading", "coffin", 1, false, At(34)));
+    yield return ("a persistently missing coffin is confirmed", guard.Confirm("loading", "coffin", 1, false, At(40)));
+    guard.Confirm("duplicate", "coffin-with-another-maid", 1, false, At(10));
+    yield return ("a duplicate with a persistent backlink mismatch is confirmed", guard.Confirm("duplicate", "coffin-with-another-maid", 1, false, At(20)));
+    yield return ("a valid server link stays valid even if its scene object is unloaded", !guard.Confirm("unloaded", "coffin", 1, true, At(30)) && !guard.Confirm("unloaded", "coffin", 1, true, At(50)));
+    guard.Confirm("handoff", "coffin", 1, false, At(10));
+    yield return ("an ownership handoff resets orphan evidence", !guard.Confirm("handoff", "coffin", 2, false, At(20)));
+    yield return ("a repaired link after handoff is kept", !guard.Confirm("handoff", "coffin", 2, true, At(21)));
+    guard.Confirm("rebound", "old", 1, false, At(10));
+    yield return ("rebinding to another coffin resets orphan evidence", !guard.Confirm("rebound", "new", 1, false, At(20)));
+    guard.Confirm("rewind", "coffin", 1, false, At(100));
+    yield return ("a time rewind cannot confirm stale evidence", !guard.Confirm("rewind", "coffin", 1, false, At(90)));
+    guard.Confirm("stale", "coffin", 1, false, At(100));
+    yield return ("an old observation after unloading must be repeated", !guard.Confirm("stale", "coffin", 1, false, At(170)));
+    guard.Confirm("scene", "coffin", 1, false, At(200));
+    guard.Clear();
+    yield return ("changing scenes clears pending orphan observations", !guard.Confirm("scene", "coffin", 1, false, At(210)));
+}
 
 static IEnumerable<(string Name, bool Passed)> SnapshotChecks()
 {

@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.11";
+    public const string Version = "0.4.12";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -179,6 +179,7 @@ public sealed class Plugin : BaseUnityPlugin
     }
 
     internal void LogWarning(string message) => Logger.LogWarning(message);
+    internal void LogInfo(string message) => Logger.LogInfo(message);
 }
 
 // The vanilla AI would also issue movement/combat orders. Only replace its decision loop

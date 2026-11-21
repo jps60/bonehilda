@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.11.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
+**Version 0.4.12.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
 
 ## Playing
 
@@ -120,7 +120,7 @@ For live diagnosis, enable `[Debugging] ActivityLogging = true`. The local profi
 
 ## Persistence and permissions
 
-The coffin and maid store each other's network IDs. Only the server confirms that a missing creature or coffin has actually been destroyed; an unloaded sector does not count as a death. Detection can take approximately 10 seconds before the respawn delay starts. No work occurs in unloaded areas.
+The coffin and maid store each other's network IDs. Only the server confirms that a missing creature or coffin has actually been destroyed; an unloaded sector does not count as a death. Detection can take approximately 10 seconds before the respawn delay starts. No work occurs in unloaded areas. Maids validate their reciprocal coffin link every 10 seconds, including legacy/unbound maids with no home ID. After a 10-second startup/ownership grace, a broken link must be observed twice by the server, at least five seconds apart. Normal orphan cleanup therefore takes about 20 seconds after loading. A missing scene object alone never counts as an orphan: valid unloaded network data keeps the maid alive. Missing/destroyed coffins, invalid home references, and duplicate maids whose coffin points to another maid are cleaned up by despawning the orphan and dropping its carried item. Coffins also check the reverse link before scheduling a replacement. A link repaired before the confirmation arrives is preserved.
 
 Carried supplies are serialized with their item data in the maid's ZDO. Cancelled deliveries return them to the coffin, or drop them beside her if the coffin is full. **If she dies carrying an item, it drops at her position** and is removed from her saved cargo. Coffin destruction also drops carried supplies. She pauses chest transfers while a player uses the coffin. She checks wards against the **coffin builder's** permissions, including on a dedicated server. Only player-placed pieces qualify for repairs and supply runs.
 
@@ -136,7 +136,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.11.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.12.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 Every requested build is delivered by committing and pushing the completed source and publishing the matching ZIP on GitHub Releases. After pushing, `scripts/publish-release.ps1` derives the version from the project, uploads the ZIP, and verifies its public download by SHA-256. It uses the existing Git Credential Manager login and accepts an optional `-NotesPath` file for release notes.
 

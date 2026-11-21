@@ -193,9 +193,11 @@ internal static class Network
 {
     internal const string CheckRpc = "BH_CheckLink";
     private const string MissingRpc = "BH_MissingLink";
+    private static readonly LinkConfirmation Confirmation = new LinkConfirmation();
 
     private static void Postfix()
     {
+        Confirmation.Clear();
         ZRoutedRpc.instance.Register<ZDOID, ZDOID>(CheckRpc, Check);
         ZRoutedRpc.instance.Register<ZDOID, ZDOID>(MissingRpc, Missing);
     }
@@ -207,10 +209,15 @@ internal static class Network
         if (holder == null || holder.GetOwner() != sender) return;
         var prefab = holder.GetPrefab();
         if (!CoffinTier.IsCoffin(prefab) && prefab != Plugin.MaidPrefab.GetStableHashCode()) return;
-        var key = CoffinTier.IsCoffin(prefab) ? Coffin.MaidKey : Maid.HomeKey;
+        var isCoffin = CoffinTier.IsCoffin(prefab);
+        var key = isCoffin ? Coffin.MaidKey : Maid.HomeKey;
         if (holder.GetZDOID(key) != linkedId) return;
-        var linked = ZDOMan.instance.GetZDO(linkedId);
-        if (linked != null && (key != Maid.HomeKey || linked.GetZDOID(Coffin.MaidKey) == holderId)) return;
+        var linked = linkedId == ZDOID.None ? null : ZDOMan.instance.GetZDO(linkedId);
+        var valid = linked != null && (isCoffin
+            ? linked.GetPrefab() == Plugin.MaidPrefab.GetStableHashCode() && linked.GetZDOID(Maid.HomeKey) == holderId
+            : CoffinTier.IsCoffin(linked.GetPrefab()) && linked.GetZDOID(Coffin.MaidKey) == holderId);
+        if (!Confirmation.Confirm(holderId.ToString(), linkedId.ToString(), sender, valid, ZNet.instance.GetTime().Ticks)) return;
+        Plugin.Instance.LogInfo("Confirmed broken " + (isCoffin ? "coffin" : "maid") + " link: " + holderId + " -> " + linkedId);
         ZRoutedRpc.instance.InvokeRoutedRPC(sender, MissingRpc, holderId, linkedId);
     }
 
@@ -219,9 +226,20 @@ internal static class Network
         if (sender != ZRoutedRpc.instance.GetServerPeerID()) return;
         var go = ZNetScene.instance.FindInstance(holderId);
         if (!go) return;
-        if (go.TryGetComponent<Coffin>(out var coffin)) coffin.ScheduleReplacement(linkedId);
+        var linkedObject = linkedId == ZDOID.None ? null : ZNetScene.instance.FindInstance(linkedId);
+        if (go.TryGetComponent<Coffin>(out var coffin))
+        {
+            if (linkedObject && linkedObject!.TryGetComponent<Maid>(out var restoredMaid) && restoredMaid.View.IsValid()
+                && restoredMaid.View.GetZDO().GetZDOID(Maid.HomeKey) == holderId) return;
+            coffin.ScheduleReplacement(linkedId);
+        }
         else if (go.TryGetComponent<Maid>(out var maid) && maid.View.IsOwner() && maid.View.GetZDO().GetZDOID(Maid.HomeKey) == linkedId)
+        {
+            if (linkedObject && linkedObject!.TryGetComponent<Coffin>(out var restoredHome) && restoredHome.View.IsValid()
+                && restoredHome.View.GetZDO().GetZDOID(Coffin.MaidKey) == holderId) return;
+            Plugin.Instance.LogInfo("Despawning orphan Bonehilda " + holderId + "; home=" + linkedId);
             maid.Retire();
+        }
     }
 }
 
