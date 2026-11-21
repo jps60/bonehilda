@@ -14,17 +14,22 @@ internal sealed class RepairApproach
     private Piece? target;
     private int cursor, solutions;
     private float topY, bottomY, bestCost, nextSearch, nextValidation;
-    private bool chosen, initialized;
+    private bool chosen, initialized, bestDirect;
     private Vector3 best, sight;
     internal string State { get; private set; } = "none";
     internal Vector3 Position => chosen ? best : Vector3.zero;
     internal Vector3 SightPoint => sight;
     internal int Probes => cursor;
+    internal bool Direct => chosen && bestDirect;
+    internal int RejectedSpace { get; private set; }
+    internal int RejectedSight { get; private set; }
+    internal int RejectedPath { get; private set; }
 
     internal void Reset()
     {
         target = null; failed.Clear(); chosen = initialized = false;
         best = sight = Vector3.zero;
+        RejectedSpace = RejectedSight = RejectedPath = 0;
         nextSearch = 0; cursor = 0; State = "none";
     }
 
@@ -45,7 +50,8 @@ internal sealed class RepairApproach
             if (Time.time >= nextValidation || offset.magnitude < .3f)
             {
                 nextValidation = Time.time + 1f;
-                if (!Usable(maid, home, piece, best, out sight) || offset.magnitude < .3f)
+                if (!Usable(maid, home, piece, best, out sight) || offset.magnitude < .3f
+                    || (bestDirect && !RepairGeometry.ClearWalk(maid, best)))
                 { State = "standing spot obstructed"; return Result.Failed; }
             }
             State = "walking to visible surface";
@@ -65,17 +71,22 @@ internal sealed class RepairApproach
                 if (failed.Any(p => RepairApproachPolicy.SameFailedSpot(HorizontalSquared(p - feet), p.y - feet.y))
                     || !Usable(maid, home, piece, feet, out var aim)) continue;
                 path.Clear();
-                if (!Pathfinding.instance.GetPath(maid.transform.position, feet, path, ai.m_pathAgentType, true, false)
-                    || path.Count == 0) continue;
-                var end = path[path.Count - 1] - feet;
-                if (!RepairApproachPolicy.EndpointMatches(HorizontalSquared(end), end.y)) continue;
+                var direct = RepairGeometry.ClearWalk(maid, feet);
+                if (direct) path.Add(feet);
+                else
+                {
+                    if (!Pathfinding.instance.GetPath(maid.transform.position, feet, path, ai.m_pathAgentType, true, false)
+                        || path.Count == 0) { RejectedPath++; continue; }
+                    var end = path[path.Count - 1] - feet;
+                    if (!RepairApproachPolicy.EndpointMatches(HorizontalSquared(end), end.y)) { RejectedPath++; continue; }
+                }
                 var length = 0f; var previous = maid.transform.position;
                 foreach (var node in path) { length += Vector3.Distance(previous, node); previous = node; }
                 length += Vector3.Distance(previous, feet);
                 var cost = RepairApproachPolicy.Cost(length, feet.y - maid.transform.position.y);
                 if (cost < bestCost)
                 {
-                    best = feet; bestCost = cost; sight = aim;
+                    best = feet; bestCost = cost; sight = aim; bestDirect = direct;
                     bestPath.Clear(); bestPath.AddRange(path);
                 }
                 solutions++;
@@ -99,6 +110,7 @@ internal sealed class RepairApproach
     private void Begin(Maid maid, Piece piece)
     {
         initialized = true; cursor = solutions = 0; columns.Clear(); bestCost = float.PositiveInfinity;
+        RejectedSpace = RejectedSight = RejectedPath = 0;
         var feet = maid.transform.position;
         var anchor = RepairGeometry.Aim(piece, maid.GetComponent<Humanoid>().GetEyePoint());
         var bounds = new Bounds(piece.transform.position, Vector3.zero);
@@ -119,13 +131,15 @@ internal sealed class RepairApproach
         columns.Sort((a, b) => HorizontalSquared(a - feet).CompareTo(HorizontalSquared(b - feet)));
     }
 
-    private static bool Usable(Maid maid, Coffin home, Piece piece, Vector3 feet, out Vector3 aim)
+    private bool Usable(Maid maid, Coffin home, Piece piece, Vector3 feet, out Vector3 aim)
     {
         aim = default;
         if (!MaintenancePolicy.InRadius((feet - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
-            || !Maid.Allowed(feet, home.Piece.GetCreator()) || !maid.HasRepairStation(piece, feet) || !RepairGeometry.Fits(maid, feet)) return false;
-        var eyeHeight = maid.GetComponent<Humanoid>().GetEyePoint().y - maid.transform.position.y;
-        return RepairGeometry.VisibleSurface(piece, feet + Vector3.up * eyeHeight, Plugin.RepairReach - .4f, out aim);
+            || !Maid.Allowed(feet, home.Piece.GetCreator()) || !maid.HasRepairStation(piece, feet) || !RepairGeometry.Fits(maid, feet))
+        { RejectedSpace++; return false; }
+        var eyeOffset = maid.GetComponent<Humanoid>().GetEyePoint() - maid.transform.position;
+        if (RepairGeometry.VisibleSurface(piece, feet + eyeOffset, Plugin.RepairReach - .4f, out aim)) return true;
+        RejectedSight++; return false;
     }
 
     private static float HorizontalSquared(Vector3 delta) => delta.x * delta.x + delta.z * delta.z;

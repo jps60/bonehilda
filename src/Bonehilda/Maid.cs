@@ -612,7 +612,7 @@ public sealed class Maid : MonoBehaviour
             if (result == RepairApproach.Result.Ready)
             {
                 var offset = standing - transform.position; offset.y = 0;
-                Navigate(standing, dt, .25f, offset.magnitude < 1.2f && RepairGeometry.ClearLastStep(this, standing));
+                Navigate(standing, dt, .25f, repairApproach.Direct || offset.magnitude < 1.2f && RepairGeometry.ClearLastStep(this, standing));
             }
             else
             {
@@ -859,6 +859,9 @@ public sealed class Maid : MonoBehaviour
             reservation = TaskClaims.Describe(this),
             repairApproach = repairApproach.State, repairStandingPoint = repairApproach.Position,
             repairSightPoint = repairApproach.SightPoint, repairProbes = repairApproach.Probes,
+            eyePosition = character.GetEyePoint(), repairReach = Plugin.RepairReach,
+            repairRejectedSpace = repairApproach.RejectedSpace, repairRejectedSight = repairApproach.RejectedSight,
+            repairRejectedPath = repairApproach.RejectedPath,
             homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
             idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
         var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));

@@ -21,7 +21,7 @@ internal static class RepairGeometry
                 var direction = aim - eye;
                 if (direction.sqrMagnitude < .0001f) continue;
                 if (Physics.Raycast(eye, direction.normalized, out var hit, reach, SightMask, QueryTriggerInteraction.Ignore)
-                    && hit.collider.GetComponentInParent<Piece>() == piece)
+                    && (hit.point - eye).sqrMagnitude < reach * reach && hit.collider.GetComponentInParent<Piece>() == piece)
                 { point = hit.point; return true; }
             }
         return false;
@@ -89,14 +89,26 @@ internal static class RepairGeometry
     }
 
     internal static bool ClearLastStep(Maid maid, Vector3 destination)
+        => ClearWalk(maid, destination, 1.2f);
+
+    internal static bool ClearWalk(Maid maid, Vector3 destination, float maxDistance = 4.5f)
+        => ClearWalk(maid.GetComponent<CapsuleCollider>(), maid.transform.position, destination, maxDistance);
+
+    internal static bool ClearWalk(CapsuleCollider capsule, Vector3 from, Vector3 destination, float maxDistance)
     {
-        var from = maid.transform.position;
-        if (Mathf.Abs(from.y - destination.y) > .45f) return false;
-        var middle = (from + destination) * .5f;
-        if (!Physics.Raycast(middle + Vector3.up * .4f, Vector3.down, out var floor, .85f, Solids, QueryTriggerInteraction.Ignore)
-            || floor.normal.y < .65f) return false;
-        Body(maid, from, out var bottom, out var top, out var radius);
         var offset = destination - from;
+        if (offset.magnitude > maxDistance) return false;
+        if (Mathf.Abs(from.y - destination.y) > .45f) return false;
+        var samples = Mathf.Max(1, Mathf.CeilToInt(offset.magnitude / .4f));
+        var previousY = from.y;
+        for (var i = 1; i <= samples; i++)
+        {
+            var sample = Vector3.Lerp(from, destination, i / (float)samples);
+            if (!Physics.Raycast(sample + Vector3.up * .4f, Vector3.down, out var floor, .85f, Solids, QueryTriggerInteraction.Ignore)
+                || !RepairApproachPolicy.SupportsStep(previousY, floor.point.y, floor.normal.y)) return false;
+            previousY = floor.point.y;
+        }
+        Body(capsule, from, out var bottom, out var top, out var radius);
         return !Physics.CapsuleCast(bottom, top, radius, offset.normalized, out _, offset.magnitude, Solids, QueryTriggerInteraction.Ignore);
     }
 }

@@ -18,6 +18,9 @@ internal sealed class MaidActivity
     public string repairApproach = "";
     public Vector3 repairStandingPoint, repairSightPoint;
     public int repairProbes;
+    public Vector3 eyePosition;
+    public float repairReach;
+    public int repairRejectedSpace, repairRejectedSight, repairRejectedPath;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour

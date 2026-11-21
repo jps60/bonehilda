@@ -107,6 +107,12 @@ Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
 
 static IEnumerable<(string Name, bool Passed)> ApproachChecks()
 {
+    yield return ("short local walks retain continuous level support", RepairApproachPolicy.SupportsStep(80, 80, 1));
+    yield return ("short local walks tolerate a shallow step", RepairApproachPolicy.SupportsStep(80, 80.3f, .9f));
+    yield return ("short local walks reject a drop to another floor", !RepairApproachPolicy.SupportsStep(80, 78, 1));
+    yield return ("short local walks reject a high riser", !RepairApproachPolicy.SupportsStep(80, 80.6f, 1));
+    yield return ("short local walks reject steep support surfaces", !RepairApproachPolicy.SupportsStep(80, 80, .4f));
+    yield return ("invalid support does not qualify as a local walking route", !RepairApproachPolicy.SupportsStep(80, float.NaN, 1));
     yield return ("a path ending on the requested floor qualifies", RepairApproachPolicy.EndpointMatches(.2f * .2f, .1f));
     yield return ("a path snapped to another floor is rejected despite matching XZ", !RepairApproachPolicy.EndpointMatches(0, 2));
     yield return ("a path stopped short of the standing spot is rejected", !RepairApproachPolicy.EndpointMatches(1, 0));
