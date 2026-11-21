@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.5.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
+**Version 0.4.6.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
 
 ## Playing
 
@@ -24,9 +24,9 @@ Bonehilda wears a fitted dress with puff sleeves, a square lace neckline, a roun
 
 **Use [E] Dismiss to send her off duty.** She stops working, walks back, returns carried supplies, and walks into her coffin. While she is returning, [E] Recall cancels dismissal. Her hover status simply reads On duty or Off duty. **Open the coffin to summon her again.** She is already inside as the door swings open, then walks clear of it. Shift-use still renames her. Her health, custom name, and supply cooldown survive dismissal; dismissal does not heal her. The final approach accepts a wider staging area, steers directly near the entrance, and uses a shallow invisible threshold ramp. During entry and exit she passes through her own cabinet frame while its floor, ramp, terrain, and other structures remain solid. A blocked route can still prevent her from reaching the coffin, so she remains available to recall.
 
-She walks to nearby damaged player-built structures and repairs them for free, like a hammer. Put supplies in the coffin and she collects one matching item, carries it to a compatible piece, and adds it. She checks the piece's actual accepted inputs and remaining capacity. Fuel deliveries leave no wasted partial slots, and she alternates a processor's fuel and input jobs.
+She walks to nearby damaged player-built structures and repairs them for free, like a hammer. Repairs use the native player prefab's build/repair reach (**5 meters** in the installed game), measured from her eyes to the piece's collider surface with a clear line of sight. This also permits reachable overhead repairs; supply transfers retain their shorter interaction distance. A stalled repair approach gets at most **three recovery retries**, including retries where no safe back-off point exists, before the piece is skipped and she selects the next repair. Replanning does not replenish that job's budget. Skipped pieces retain the normal temporary retry cooldown (at least 10 seconds), allowing later attempts if access changes. Put supplies in the coffin and she collects one matching item, carries it to a compatible piece, and adds it. She checks the piece's actual accepted inputs and remaining capacity. Fuel deliveries leave no wasted partial slots, and she alternates a processor's fuel and input jobs.
 
-She uses Valheim's **player animation controller**, retargeted onto her own skeleton avatar. For repairs she draws a visible hammer from her belt with the player's **R-key equip animation**, swings it, then holsters it again. Coffin transfers and supplying machines use the player's interaction animation. Repairs play native build/hammer sounds, supplies use the machine's native sound with a fallback for silent consumers, and the coffin latch sounds when the hinged door reaches its closed position. Her hammer is a visual tool and adds no inventory item or death loot. It preserves its physical size on the imported rig.
+She uses Valheim's **player animation controller**, retargeted onto her own skeleton avatar. For repairs she draws a visible hammer from her belt with the player's **R-key equip animation** and swings it. If more damaged pieces remain, she keeps the hammer drawn and immediately walks to the nearest eligible repair after the swing settles. Travel overlaps the repair cooldown; swings still respect ActionInterval. She holsters the hammer when no further repairs qualify, or when the run is cancelled by dismissal, an invalid target, or a timeout. Coffin transfers and supplying machines use the player's interaction animation. Repairs play native build/hammer sounds, supplies use the machine's native sound with a fallback for silent consumers, and the coffin latch sounds when the hinged door reaches its closed position. Her hammer is a visual tool and adds no inventory item or death loot. It preserves its physical size on the imported rig.
 
 Each maid supplies **at most one item per configurable interval**, default **1 second**, shared across all her destinations. Walking, collecting one item per trip, scanning, and finishing the interaction animation can make deliveries slower. There is no catch-up burst after waiting. The accepted-delivery timestamp persists through save/load and network ownership changes. Repairs keep their separate `ActionInterval` setting.
 
@@ -77,7 +77,7 @@ Clothing and the feather duster share Hildir's native clothing shader with a mat
 ## Installation
 
 1. Install [BepInEx for Valheim](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/) and [Jötunn 2.30.2](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/).
-2. Import `dist/Bonehilda-0.4.5.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
+2. Import `dist/Bonehilda-0.4.6.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
 3. Install the same mod version and dependencies on **every client and the dedicated server**.
 4. Launch once to generate `BepInEx/config/com.bonehilda.valheim.cfg`.
 
@@ -129,7 +129,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.5.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.6.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 ```powershell
 dotnet build src/Bonehilda/Bonehilda.csproj -c Release
@@ -146,7 +146,7 @@ The automated policy checks exercise fuel/input capacity, ammo compatibility, re
 
 - Build all three tiers: each produces exactly one tame maid with 0/1/2 stars and 2/4/8 chest slots. Check the upright door's inner faces, opening sequence, cap, apron, sleeves, skirt, and skeleton palette while she walks.
 - Damage player-built walls within and beyond the radius. Only reachable pieces within the radius should be repaired; generated ruins should be ignored.
-- Watch a repair: the hammer should move from belt to hand during the equip motion, swing, then return to the belt. Supplies and coffin transfers should use the interaction gesture. Check this from a second client too.
+- Damage several pieces: she should draw the hammer once, repair them in sequence, and keep it in hand while walking between them. She should holster it after the last repair or when dismissed mid-route. Repair swings must still respect `ActionInterval`. Supplies and coffin transfers should use the interaction gesture. Check this from a second client too.
 - Listen for the hammer and machine supply sounds. Check that each coffin plays its latch when the door reaches the frame.
 - Pet her during a delivery, pet again to cancel, then dismiss her all the way inside. Opening the coffin should bring her out with the same health/name. Repeat after save/load and while another client owns the area.
 - Set `SupplyInterval` to 15 seconds with several nearby consumers. Accepted deliveries by a single maid must stay at least 15 seconds apart, including after save/load. Restore it to 1 for the default pacing.

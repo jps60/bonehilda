@@ -20,6 +20,14 @@ internal sealed class WorkAnimations : MonoBehaviour
     private const string EmoteKey = "BH_idleEmote", EmoteId = "BH_idleEmoteId", EmoteEnd = "BH_idleEmoteEnd";
     private int seenEmote;
     private Animator animator = null!;
+    internal bool HammerDrawn
+    {
+        get
+        {
+            if (!view) view = GetComponent<ZNetView>();
+            return view && view.IsValid() && view.GetZDO().GetBool(DrawnKey);
+        }
+    }
 
     internal static void Configure(GameObject maid, GameObject player)
     {

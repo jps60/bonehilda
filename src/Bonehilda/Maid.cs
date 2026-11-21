@@ -40,6 +40,8 @@ public sealed class Maid : MonoBehaviour
     private Vector3 recoveryPoint, recoveryGoal;
     private float recoveryUntil;
     private int recoveryAttempts;
+    private readonly RepairRetries repairRetries = new RepairRetries();
+    private bool repairRouteFailed;
     private readonly IdleActivities idle = new IdleActivities();
     private WorkPhase phase;
     private float phaseEnds;
@@ -268,10 +270,16 @@ public sealed class Maid : MonoBehaviour
         {
             StopNavigation();
             UpdateWork(home);
-            return;
+            // A repair can hand off directly to the next damaged piece.
+            if (phase != WorkPhase.None) return;
         }
-        if (Time.time < nextAction) { StopNavigation(); ai.StopMoving(); return; }
-        if (job != null && (!Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value)) CancelJob();
+        if (job != null && (repairRouteFailed || !Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value))
+        {
+            if (!job.Wear || !ContinueRepairs(home)) CancelJob();
+        }
+        // Repair cooldown limits swings, not the walk to the next repair.
+        // Supply pickups and transfers still finish their interaction pause.
+        if (Time.time < nextAction && (job == null || !job.Wear)) { StopNavigation(); ai.StopMoving(); return; }
         if (job == null && cargo.GetAllItems().Count > 0)
         {
             idle.Cancel(this);
@@ -284,6 +292,7 @@ public sealed class Maid : MonoBehaviour
             nextScan = Time.time + Plugin.ScanInterval.Value;
             job = FindJob(home);
             jobStarted = Time.time;
+            ResetRepairRoute();
             if (job != null) idle.Cancel(this);
         }
         if (job == null)
@@ -313,13 +322,22 @@ public sealed class Maid : MonoBehaviour
             return;
         }
         var port = job.Supply?.Port;
-        var point = port ? port!.position : WorkPoint(job.Piece);
-        if (!WalkTo(point, delta, job.Piece) || Time.time < nextAction) return;
+        var point = job.Wear ? RepairPoint(job.Piece) : port ? port!.position : WorkPoint(job.Piece);
+        if (!WalkTo(point, delta, job.Piece, job.Wear) || Time.time < nextAction) return;
         ai.LookAt(point);
         if (job.Wear)
         {
-            animations.SetHammer(true);
-            SetPhase(WorkPhase.Drawing, 1f);
+            if (animations.HammerDrawn)
+            {
+                var facing = point - transform.position; facing.y = 0;
+                if (facing.sqrMagnitude > .01f && Vector3.Dot(transform.forward, facing.normalized) < .65f) return;
+                SwingHammer();
+            }
+            else
+            {
+                animations.SetHammer(true);
+                SetPhase(WorkPhase.Drawing, 1f);
+            }
         }
         else if (job.Supply != null && SupplyReady())
         {
@@ -410,23 +428,23 @@ public sealed class Maid : MonoBehaviour
         ai.StopMoving();
         if (job == null || !job.Piece || !job.View || !job.View.IsValid()) { CancelJob(); return; }
         var port = job.Supply?.Port;
-        var point = port ? port!.position : WorkPoint(job.Piece);
+        var point = job.Wear ? RepairPoint(job.Piece) : port ? port!.position : WorkPoint(job.Piece);
         ai.LookAt(point);
         if (Time.time < phaseEnds) return;
         switch (phase)
         {
             case WorkPhase.Drawing:
-                if (!Valid(job, home) || !WithinWorkReach(job.Piece, point)) { CancelJob(); return; }
-                animations.Repair();
-                SetPhase(WorkPhase.Repairing, 0.25f);
+                if (!Valid(job, home) || !WithinRepairReach(job.Piece, point)) { CancelJob(); return; }
+                SwingHammer();
                 break;
             case WorkPhase.Repairing:
                 // Commit at the swing, after checking the target again. No combat attack is started.
-                if (Valid(job, home) && WithinWorkReach(job.Piece, point) && job.Wear!.Repair()) WorkSounds.Repair(job.Piece);
+                if (Valid(job, home) && WithinRepairReach(job.Piece, point) && job.Wear!.Repair()) WorkSounds.Repair(job.Piece);
                 nextAction = Time.time + Plugin.WorkInterval.Value;
                 SetPhase(WorkPhase.Recovering, 0.35f);
                 break;
             case WorkPhase.Recovering:
+                if (ContinueRepairs(home)) break;
                 animations.SetHammer(false);
                 SetPhase(WorkPhase.Holstering, 1f);
                 break;
@@ -438,6 +456,28 @@ public sealed class Maid : MonoBehaviour
                 CancelJob();
                 break;
         }
+    }
+
+    private void SwingHammer()
+    {
+        animations.Repair();
+        SetPhase(WorkPhase.Repairing, .25f);
+    }
+
+    private bool ContinueRepairs(Coffin home)
+    {
+        // Do not immediately revisit the piece just attempted (including rain
+        // damage or a rejected repair). Keep the existing retry cooldown.
+        SkipCurrentJob();
+        var next = FindJob(home, repairsOnly: true);
+        nextScan = Time.time;
+        if (next == null) return false;
+        job = next;
+        jobStarted = Time.time;
+        ResetRepairRoute();
+        phase = WorkPhase.None;
+        StopNavigation();
+        return true;
     }
 
     private void DeliverSupply(Coffin home, Job delivery)
@@ -458,7 +498,7 @@ public sealed class Maid : MonoBehaviour
         WorkSounds.Supplied(delivery.Supply);
     }
 
-    private Job? FindJob(Coffin home)
+    private Job? FindJob(Coffin home, bool repairsOnly = false)
     {
         pieces.Clear();
         Piece.GetAllPiecesInRadius(home.transform.position, Plugin.Radius.Value, pieces);
@@ -472,7 +512,7 @@ public sealed class Maid : MonoBehaviour
             if (skipped.TryGetValue(view.GetZDO().m_uid, out var until) && Time.time < until) continue;
             var wear = piece.GetComponent<WearNTear>();
             var candidate = new Job { Piece = piece, View = view };
-            candidate.Supply = SupplyTarget.ForPiece(piece)
+            candidate.Supply = repairsOnly ? null : SupplyTarget.ForPiece(piece)
                 .Where(option => Enabled(option) && option.NeedsItem && home.Chest.GetInventory().GetAllItems().Any(option.Matches))
                 .OrderBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
@@ -516,9 +556,9 @@ public sealed class Maid : MonoBehaviour
         return true;
     }
 
-    private bool WalkTo(Vector3 point, float dt, Piece piece)
+    private bool WalkTo(Vector3 point, float dt, Piece piece, bool repairing = false)
     {
-        if (Vector3.Distance(transform.position, point) <= 2.4f && CanReach(piece, point))
+        if (repairing ? WithinRepairReach(piece, point) : Vector3.Distance(transform.position, point) <= 2.4f && CanReach(piece, point))
         {
             StopNavigation();
             ai.StopMoving();
@@ -554,16 +594,31 @@ public sealed class Maid : MonoBehaviour
                 return;
             }
         }
-        if (navigation.Advance(dt, feet.x, feet.z, point.x, point.y, point.z, Plugin.StuckTime.Value)
-            && TryBackOff(point, passage))
+        if (navigation.Advance(dt, feet.x, feet.z, point.x, point.y, point.z, Plugin.StuckTime.Value))
         {
-            recoveryGoal = point;
-            recoveringRoute = true;
-            recoveryUntil = Time.time + 4f;
+            if (job != null && job.Wear)
+            {
+                if (!repairRetries.TryAgain())
+                {
+                    repairRouteFailed = true;
+                    StopNavigation();
+                    ai.StopMoving();
+                    return;
+                }
+                // Give each bounded retry its own approach timeout. The budget
+                // also counts failures to find a safe back-off point.
+                jobStarted = Time.time;
+            }
             ResetPath();
-            // Move away on this frame, rather than spending another frame at the obstruction.
-            Navigate(point, dt, stoppingDistance, direct, passage);
-            return;
+            if (TryBackOff(point, passage))
+            {
+                recoveryGoal = point;
+                recoveringRoute = true;
+                recoveryUntil = Time.time + 4f;
+                // Move away on this frame instead of waiting at the obstruction.
+                Navigate(point, dt, stoppingDistance, direct, passage);
+                return;
+            }
         }
         if (direct)
         {
@@ -639,6 +694,44 @@ public sealed class Maid : MonoBehaviour
         return point;
     }
 
+    private Vector3 RepairPoint(Piece piece)
+    {
+        var eye = character.GetEyePoint();
+        var point = piece.transform.position;
+        var distance = float.PositiveInfinity;
+        foreach (var collider in piece.GetComponentsInChildren<Collider>())
+        {
+            if (!collider.enabled || collider.isTrigger) continue;
+            Vector3 candidate;
+            if (collider is MeshCollider mesh && !mesh.convex)
+            {
+                // ClosestPoint does not support concave mesh colliders. Probe
+                // actual geometry so range is measured to a surface, like a player hit.
+                var direction = collider.bounds.ClosestPoint(eye) - eye;
+                if (direction.sqrMagnitude < .001f) direction = collider.bounds.center - eye;
+                if (!collider.Raycast(new Ray(eye, direction.normalized), out var hit, direction.magnitude + collider.bounds.size.magnitude + 1f))
+                {
+                    direction = collider.bounds.center - eye;
+                    if (!collider.Raycast(new Ray(eye, direction.normalized), out hit, direction.magnitude + collider.bounds.size.magnitude + 1f)) continue;
+                }
+                candidate = hit.point;
+            }
+            else candidate = collider.ClosestPoint(eye);
+            var d = (candidate - eye).sqrMagnitude;
+            if (d >= distance) continue;
+            point = candidate; distance = d;
+        }
+        return point;
+    }
+
+    private bool WithinRepairReach(Piece piece, Vector3 point)
+    {
+        var eye = character.GetEyePoint();
+        if (!MaintenancePolicy.InRepairReach((point - eye).sqrMagnitude, Plugin.RepairReach)) return false;
+        return !Physics.Linecast(eye, point, out var hit, LayerMask.GetMask("piece", "terrain", "static_solid"), QueryTriggerInteraction.Ignore)
+            || hit.collider.GetComponentInParent<Piece>() == piece;
+    }
+
     internal bool CanReach(Piece piece, Vector3 point)
     {
         if (Mathf.Abs(point.y - transform.position.y) > 2.8f) return false;
@@ -690,12 +783,26 @@ public sealed class Maid : MonoBehaviour
     private void CancelJob()
     {
         idle.Cancel(this);
-        if (phase == WorkPhase.Drawing || phase == WorkPhase.Repairing || phase == WorkPhase.Recovering)
-            animations.SetHammer(false);
+        // Chained repairs can be walking with the hammer drawn and no active
+        // animation phase. Dismissal, invalid targets, and timeouts still stow it.
+        if (animations.HammerDrawn) animations.SetHammer(false);
         phase = WorkPhase.None;
-        if (job != null && job.View && job.View.IsValid()) skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(10f, Plugin.ScanInterval.Value * 2f);
+        SkipCurrentJob();
         job = null;
+        ResetRepairRoute();
         ai.StopMoving();
+    }
+
+    private void ResetRepairRoute()
+    {
+        repairRetries.Reset();
+        repairRouteFailed = false;
+    }
+
+    private void SkipCurrentJob()
+    {
+        if (job != null && job.View && job.View.IsValid())
+            skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(10f, Plugin.ScanInterval.Value * 2f);
     }
 
     private void LoadCargo()

@@ -18,10 +18,11 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.5";
+    public const string Version = "0.4.6";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
+    internal static float RepairReach = 5f;
     internal static ConfigEntry<float> Radius = null!;
     internal static ConfigEntry<float> ScanInterval = null!;
     internal static ConfigEntry<float> WorkInterval = null!;
@@ -50,7 +51,7 @@ public sealed class Plugin : BaseUnityPlugin
         Instance = this;
         Radius = Setting("Work", "Radius", 30f, "Work radius in meters, centered on the coffin.", 5f, 100f);
         ScanInterval = Setting("Work", "ScanInterval", 5f, "Seconds between searches for work.", 1f, 60f);
-        WorkInterval = Setting("Work", "ActionInterval", 2f, "Minimum seconds between repairs; the draw/swing/holster animation must also finish.", 0.5f, 30f);
+        WorkInterval = Setting("Work", "ActionInterval", 2f, "Minimum seconds between repairs. She can walk to the next damaged piece with her hammer drawn during this cooldown.", 0.5f, 30f);
         SupplyInterval = Setting("Work", "SupplyInterval", 1f, "Minimum seconds between accepted supply items per maid, across all destinations. Travel and interaction animations can take longer.", 0.5f, 60f);
         RespawnDelay = Setting("Maid", "RespawnDelay", 60f, "Seconds before replacing a dead Bonehilda.", 5f, 3600f);
         JobTimeout = Setting("Work", "JobTimeout", 30f, "Skip jobs she cannot reach within this many seconds.", 5f, 120f);
@@ -99,7 +100,9 @@ public sealed class Plugin : BaseUnityPlugin
             character.m_randomWeapon = Array.Empty<GameObject>();
             character.m_randomShield = Array.Empty<GameObject>();
             character.m_randomArmor = Array.Empty<GameObject>();
-            WorkAnimations.Configure(prefab, PrefabManager.Instance.GetPrefab("Player"));
+            var player = PrefabManager.Instance.GetPrefab("Player");
+            RepairReach = player.GetComponent<Player>().m_maxPlaceDistance;
+            WorkAnimations.Configure(prefab, player);
             Visuals.Dress(prefab.transform);
             // Apply after binding the garment so both the body and cloth grow together.
             prefab.GetComponentInChildren<Animator>(true).transform.localScale *= 1.04f;

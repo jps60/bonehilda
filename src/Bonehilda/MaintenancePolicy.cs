@@ -12,6 +12,10 @@ internal static class MaintenancePolicy
     internal static bool NeedsFuel(float current, float maximum, bool infinite) =>
         !infinite && maximum > 0f && !float.IsNaN(current) && current >= 0f && current <= maximum - 1f;
     internal static bool NeedsRepair(float healthFraction) => healthFraction > 0f && healthFraction < 0.999f;
+    // Native Player.Repair measures strictly less than m_maxPlaceDistance from
+    // the eyes to the hit surface, including vertical distance.
+    internal static bool InRepairReach(float distanceSquared, float reach) =>
+        distanceSquared >= 0f && reach > 0f && distanceSquared < reach * reach;
     internal static bool NeedsInput(int queued, int capacity) => queued >= 0 && capacity > 0 && queued < capacity;
     internal static bool CanLoadAmmo(int loaded, int capacity, string currentType, string incomingType) =>
         NeedsInput(loaded, capacity) && (loaded == 0 || currentType == incomingType);

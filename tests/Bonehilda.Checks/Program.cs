@@ -21,6 +21,15 @@ var checks = new (string Name, bool Passed)[]
     ("negative health is ignored", !MaintenancePolicy.NeedsRepair(-1)),
     ("invalid health is ignored", !MaintenancePolicy.NeedsRepair(float.NaN)),
     ("floating point noise does not cause repair loops", !MaintenancePolicy.NeedsRepair(0.9999f)),
+    ("repair surface just inside player reach is accepted", MaintenancePolicy.InRepairReach(4.99f * 4.99f, 5f)),
+    ("native player repair boundary is strict", !MaintenancePolicy.InRepairReach(25f, 5f)),
+    ("surface beyond player reach is rejected", !MaintenancePolicy.InRepairReach(25.01f, 5f)),
+    ("repair reach includes vertical distance", !MaintenancePolicy.InRepairReach(4f * 4f + 4f * 4f, 5f)),
+    ("repair reach accepts overhead surfaces within player range", MaintenancePolicy.InRepairReach(3.5f * 3.5f + 1f, 5f)),
+    ("invalid reach does not permit repairs", !MaintenancePolicy.InRepairReach(1f, float.NaN) && !MaintenancePolicy.InRepairReach(1f, 0f)),
+    ("invalid target distance does not permit repairs", !MaintenancePolicy.InRepairReach(float.NaN, 5f) && !MaintenancePolicy.InRepairReach(-1f, 5f)),
+    ("three repair retries exhaust even when paths are replanned", BlockedRepairExhaustsRetries()),
+    ("a new repair receives its own retry budget", NewRepairResetsRetries()),
     ("inside radius", MaintenancePolicy.InRadius(29 * 29, 30)),
     ("radius boundary is inclusive", MaintenancePolicy.InRadius(30 * 30, 30)),
     ("outside radius", !MaintenancePolicy.InRadius(30.1f * 30.1f, 30)),
@@ -137,6 +146,32 @@ static bool JitterStillRetries()
     for (var i = 0; i < 70; i++)
         if (route.Advance(.1f, (i % 2 == 0 ? .03f : -.03f), 0, 10, 0, 0, 6)) return true;
     return false;
+}
+
+static bool BlockedRepairExhaustsRetries()
+{
+    var progress = new NavigationProgress();
+    var budget = new RepairRetries();
+    var retries = 0;
+    for (var frame = 0; frame < 400; frame++)
+    {
+        if (!progress.Advance(.1f, 0, 0, 10, 0, 0, 6)) continue;
+        if (!budget.TryAgain()) return retries == 3;
+        retries++;
+        // Replanning the route resets observations, but not the job's budget.
+        progress.Reset();
+    }
+    return false;
+}
+
+static bool NewRepairResetsRetries()
+{
+    var budget = new RepairRetries();
+    for (var i = 0; i < 3; i++) if (!budget.TryAgain()) return false;
+    if (budget.TryAgain()) return false;
+    budget.Reset();
+    for (var i = 0; i < 3; i++) if (!budget.TryAgain()) return false;
+    return !budget.TryAgain();
 }
 
 static IEnumerable<(string Name, bool Passed)> IdleChecks()
