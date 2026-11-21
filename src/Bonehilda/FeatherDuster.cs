@@ -121,6 +121,7 @@ internal sealed class FeatherDuster : MonoBehaviour
         var height = Mathf.InverseLerp(.45f, 1.10f, surface.y - transform.position.y);
         var across = Mathf.Clamp(Vector3.Dot(strokePoint - (surface + side) * .5f, transform.right) * 3f, -1f, 1f);
         var reach = cycles < 1f ? .55f - .20f * across : .55f - .20f * across + travel * .30f;
+        var restingBrush = DusterPlume.Contact(tool, plume);
         PoseBody(spine, shoulder, elbow, hand, stance, surface, strokePoint, height, across, reach, blend);
         grip.CloseFingers();
 
@@ -144,12 +145,32 @@ internal sealed class FeatherDuster : MonoBehaviour
         elbow.rotation = Quaternion.AngleAxis(roll, axis) * elbow.rotation;
 
         DusterPlume.Bend(plume, tool, stroke.normalized, drag, Mathf.Abs(drag), blend);
-        var bristles = DusterPlume.Contact(tool, plume);
-        DustingStance.Reach(shoulder, elbow, bristles, strokePoint - Vector3.up * .002f, pole, 1f);
+        // Follow the middle of the fan horizontally. The lowest vane supplies
+        // the height only, so switching vanes cannot yank the wrist sideways.
+        var center = Vector3.Lerp(tool.TransformPoint(Vector3.up * .45f),
+            plume.TransformPoint(Vector3.up * .23f), .84f);
+        var bottom = DusterPlume.Contact(tool, plume);
+        var underside = Vector3.ProjectOnPlane(Vector3.down, plume.up).normalized * (.075f * tool.lossyScale.x);
+        var goal = strokePoint - Vector3.ProjectOnPlane(underside, Vector3.up)
+            + Vector3.up * (center.y - bottom.y - .002f);
+        DustingStance.Reach(shoulder, elbow, center, goal, pole, 1f);
 
         shoulder.localRotation = Quaternion.Slerp(shoulderRest, shoulder.localRotation, blend);
         elbow.localRotation = Quaternion.Slerp(elbowRest, elbow.localRotation, blend);
         hand.localRotation = Quaternion.Slerp(handRest, hand.localRotation, blend);
+        if (blend < 1f)
+        {
+            // Raise on the maid's side of the rim, cross above it, then settle.
+            // The exit traverses the same three-part path in reverse.
+            var clearance = Mathf.Max(restingBrush.y, strokePoint.y) + .14f;
+            var waypoint = Vector3.Lerp(restingBrush, strokePoint, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(.28f, .80f, blend)));
+            waypoint.y = blend < .5f
+                ? Mathf.Lerp(restingBrush.y, clearance, Mathf.SmoothStep(0f, 1f, blend / .5f))
+                : Mathf.Lerp(clearance, strokePoint.y, Mathf.SmoothStep(0f, 1f, (blend - .5f) / .5f));
+            var low = DusterPlume.Contact(tool, plume);
+            var bend = Vector3.ProjectOnPlane(elbow.position - shoulder.position, low - shoulder.position);
+            DustingStance.Reach(shoulder, elbow, low, waypoint, bend, 1f);
+        }
         dust?.Sweep(start, cycles + .25f, DusterPlume.Contact(tool, plume), strokePoint, stroke.normalized);
     }
 
