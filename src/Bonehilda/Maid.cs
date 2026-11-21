@@ -277,6 +277,8 @@ public sealed class Maid : MonoBehaviour
             {
                 ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
                 if (housekeeping.Tick(this, ai, home, pieces, delta)) return;
+                // Our AI patch skips BaseAI.UpdateAI, which normally advances the wander timer.
+                ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
                 ai.RandomMovement(delta, home.transform.position, false);
             }
             else

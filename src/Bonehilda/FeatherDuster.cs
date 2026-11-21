@@ -11,17 +11,22 @@ internal sealed class FeatherDuster : MonoBehaviour
     internal const string SurfaceKey = "BH_dustSurface";
     internal const float Seconds = 3.6f;
     private ZNetView? view;
-    private Transform? shoulder, elbow, hand, belt, tool;
-    private Quaternion shoulderRest, elbowRest, handRest;
+    private Transform? spine, shoulder, elbow, hand, belt, tool;
+    private DusterGrip? grip;
+    private FeatherDust? dust;
+    private Quaternion spineRest, shoulderRest, elbowRest, handRest;
     private bool posed;
 
     private void Start()
     {
         view = GetComponent<ZNetView>();
         var animator = GetComponentInChildren<Animator>();
+        spine = animator.GetBoneTransform(HumanBodyBones.Spine);
         shoulder = animator.GetBoneTransform(HumanBodyBones.RightUpperArm);
         elbow = animator.GetBoneTransform(HumanBodyBones.RightLowerArm);
         hand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+        grip = new DusterGrip(animator, GetComponent<VisEquipment>().m_rightHand);
+        dust = FeatherDust.Create(transform);
         var hips = animator.GetBoneTransform(HumanBodyBones.Hips);
         belt = Visuals.Child(hips, "BH_DusterLoop");
         belt.position = hips.position - transform.right * .22f + Vector3.up * .15f;
@@ -37,16 +42,18 @@ internal sealed class FeatherDuster : MonoBehaviour
 
     private void Update()
     {
-        if (!posed || shoulder == null || elbow == null || hand == null) return;
+        if (!posed || spine == null || shoulder == null || elbow == null || hand == null) return;
+        spine.localRotation = spineRest;
         shoulder.localRotation = shoulderRest;
         elbow.localRotation = elbowRest;
         hand.localRotation = handRest;
+        grip?.Restore();
         posed = false;
     }
 
     private void LateUpdate()
     {
-        if (tool == null || belt == null || shoulder == null || elbow == null || hand == null
+        if (grip == null || spine == null || tool == null || belt == null || shoulder == null || elbow == null || hand == null
             || view == null || !view.IsValid() || !ZNet.instance) return;
         var data = view.GetZDO();
         var start = data.GetLong(StartKey);
@@ -61,21 +68,38 @@ internal sealed class FeatherDuster : MonoBehaviour
             }
             return;
         }
-        if (tool.parent != hand) tool.SetParent(hand, true);
+        var socket = grip.Socket;
+        if (tool.parent != socket)
+        {
+            tool.SetParent(socket, true);
+            tool.localPosition = Vector3.zero;
+            tool.localRotation = Quaternion.identity;
+        }
+        spineRest = spine.localRotation;
         shoulderRest = shoulder.localRotation;
         elbowRest = elbow.localRotation;
         handRest = hand.localRotation;
         posed = true;
         var blend = Mathf.SmoothStep(0, 1, Mathf.Min(elapsed, Seconds - elapsed) / .32f);
-        var stroke = elapsed * 2f * Mathf.PI * 1.15f;
-        var tip = data.GetVec3(SurfaceKey, transform.position) + transform.right * (.20f * Mathf.Sin(stroke))
+        var cycles = elapsed * 1.15f;
+        var stroke = cycles * 2f * Mathf.PI;
+        var surface = data.GetVec3(SurfaceKey, transform.position);
+        var tip = surface + transform.right * (.20f * Mathf.Sin(stroke))
             + Vector3.up * (.035f + .045f * Mathf.Abs(Mathf.Cos(stroke)));
-        var axis = (tip - (shoulder.position + transform.forward * .25f)).normalized;
-        var grip = Vector3.Lerp(hand.position, tip - axis * .46f, blend);
-        Reach(shoulder, elbow, hand, grip);
-        hand.rotation = Quaternion.AngleAxis(12f * Mathf.Sin(stroke) * blend, transform.forward) * hand.rotation;
-        tool.position = hand.position;
-        tool.rotation = Quaternion.FromToRotation(Vector3.up, (tip - hand.position).normalized);
+        var surfaceHeight = surface.y - transform.position.y;
+        var lean = Mathf.Lerp(26f, 9f, Mathf.InverseLerp(.45f, 1.2f, surfaceHeight));
+        spine.rotation = Quaternion.AngleAxis(lean * blend, transform.right) * spine.rotation;
+        var axis = (tip - shoulder.position).normalized;
+        var palmRotation = Quaternion.FromToRotation(socket.up, axis);
+        var wrist = tip - axis * .49f - palmRotation * (socket.position - hand.position);
+        Reach(shoulder, elbow, hand, Vector3.Lerp(hand.position, wrist, blend));
+        // The palm is offset from the wrist. Aim the full wrist-to-feathers lever
+        // so rotating the hand also puts the plume on the furniture.
+        var brush = tool.TransformPoint(Vector3.up * .51f);
+        var aim = Quaternion.FromToRotation(brush - hand.position, tip - hand.position);
+        hand.rotation = Quaternion.Slerp(Quaternion.identity, aim, blend) * hand.rotation;
+        grip.Close(blend);
+        dust?.Sweep(start, cycles, tool.TransformPoint(Vector3.up * .51f), surface, transform.right);
     }
 
     private void Reach(Transform shoulder, Transform elbow, Transform hand, Vector3 grip)
