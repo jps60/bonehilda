@@ -62,14 +62,10 @@ internal sealed class DusterGrip
         }
     }
 
-    internal void Pose(Transform elbow, Transform hand, float followThrough, float blend)
+    internal Vector3 Dorsal => palm.TransformDirection(backOfHand);
+
+    internal void CloseFingers(float blend)
     {
-        // Keep the wrist straight before solving the elbow and tool as one link.
-        var forearm = (hand.position - elbow.position).normalized;
-        var straighten = Quaternion.FromToRotation(palm.right, forearm);
-        hand.rotation = Quaternion.Slerp(Quaternion.identity, straighten, blend) * hand.rotation;
-        var follow = palm.rotation * Quaternion.Euler(0f, followThrough * 9f, 5f) * Quaternion.Inverse(palm.rotation);
-        hand.rotation = Quaternion.Slerp(Quaternion.identity, follow, blend) * hand.rotation;
         // Flex in the knuckle plane only. Preserve the avatar's finger spacing and twist.
         foreach (var joint in fingers)
         {
@@ -84,17 +80,6 @@ internal sealed class DusterGrip
             thumbRest = thumb.localRotation;
             thumb.rotation = Quaternion.AngleAxis(19f * blend, palm.up) * thumb.rotation;
         }
-    }
-
-    internal void Pronate(Transform elbow, Vector3 brushTip, float blend)
-    {
-        // Roll the posed forearm around the reach line so the feathers stay on target.
-        var reach = (brushTip - elbow.position).normalized;
-        var dorsal = Vector3.ProjectOnPlane(palm.TransformDirection(backOfHand), reach);
-        var up = Vector3.ProjectOnPlane(Vector3.up, reach);
-        if (up.sqrMagnitude < .001f || dorsal.sqrMagnitude < .001f) return;
-        var roll = Vector3.SignedAngle(dorsal, up, reach);
-        elbow.rotation = Quaternion.AngleAxis(roll * blend, reach) * elbow.rotation;
     }
 
     internal void Restore()
