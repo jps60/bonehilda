@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.4.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
+**Version 0.4.5.** Built against Valheim **0.221.4** reference assemblies and checked against the installed **Valheim 1.0.21 / Jötunn 2.30.2** libraries. On flat ground in a local test world, all three maids exited their coffins, returned, and cleared the closing door. Multiplayer and obstructed return paths still need gameplay testing.
 
 ## Playing
 
@@ -72,12 +72,12 @@ She occasionally sits in an unoccupied nearby chair using its native seated pose
 
 New maids are named **Bonehilda**, with no random summoned-skeleton name. Existing random names are migrated where recognized, and player-set names are preserved. Her hover action shows Dismiss while on duty and Recall while off duty or returning; the alternate-use rename action is preserved.
 
-Clothing uses Hildir's native clothing shader with a separate matte material, retaining the authored atlas and mesh. It disables inherited rain/snow sheen, value noise, triplanar mapping, metallic/gloss-map variants, and uses an albedo multiplier of 0.8. The cabinet keeps its own material. These controls are documented in [Jötunn's shader list](https://valheim-modding.github.io/Jotunn/data/prefabs/shader-list.html) and [material keyword list](https://valheim-modding.github.io/Jotunn/data/prefabs/material-list.html); [Unity's shading guidance](https://docs.unity.cn/2019.1/Documentation/Manual/BestPracticeMakingBelievableVisuals5.html) explains the effect of overly bright albedo. This mitigates clothing shimmer; firelight validation remains necessary. Unity also documents [flicker caused by real-time light limits](https://docs.unity.com/en-us/engine/6000.3/manual/lighting-overview/lighting/ts-lights-flicker-disappear), which a material adjustment cannot universally fix. The mod does not change global graphics settings.
+Clothing and the feather duster share Hildir's native clothing shader with a matte material, retaining their authored atlas and meshes. The duster uses the zero-star palette and no longer inherits the chest's building shader or rain/noise sheen. It disables inherited rain/snow sheen, value noise, triplanar mapping, metallic/gloss-map variants, and uses an albedo multiplier of 0.8. The cabinet keeps its own material. These controls are documented in [Jötunn's shader list](https://valheim-modding.github.io/Jotunn/data/prefabs/shader-list.html) and [material keyword list](https://valheim-modding.github.io/Jotunn/data/prefabs/material-list.html); [Unity's shading guidance](https://docs.unity.cn/2019.1/Documentation/Manual/BestPracticeMakingBelievableVisuals5.html) explains the effect of overly bright albedo. This mitigates clothing shimmer; firelight validation remains necessary. Unity also documents [flicker caused by real-time light limits](https://docs.unity.com/en-us/engine/6000.3/manual/lighting-overview/lighting/ts-lights-flicker-disappear), which a material adjustment cannot universally fix. The mod does not change global graphics settings.
 
 ## Installation
 
 1. Install [BepInEx for Valheim](https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/) and [Jötunn 2.30.2](https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/).
-2. Import `dist/Bonehilda-0.4.4.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
+2. Import `dist/Bonehilda-0.4.5.zip` as a local mod in r2modman, or extract it into the Valheim installation directory for a manual install. It contains **only `Bonehilda.dll`** under `BepInEx/plugins/Bonehilda/`, plus the package manifest, icon, README, and license. Update the profile you actually launch.
 3. Install the same mod version and dependencies on **every client and the dedicated server**.
 4. Launch once to generate `BepInEx/config/com.bonehilda.valheim.cfg`.
 
@@ -129,7 +129,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.4.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.5.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 ```powershell
 dotnet build src/Bonehilda/Bonehilda.csproj -c Release

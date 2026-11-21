@@ -51,8 +51,10 @@ internal sealed class FeatherDuster : MonoBehaviour
         belt.position = hips.position - transform.right * .22f + Vector3.up * .15f;
         belt.rotation = Quaternion.FromToRotation(Vector3.up, -Vector3.up - transform.right * .19f - transform.forward * .15f);
         tool = new GameObject("BH_FeatherDuster").transform;
-        plume = DusterPlume.Attach(tool, Visuals.Palette(Visuals.Template(
-            Jotunn.Managers.PrefabManager.Instance.GetPrefab("piece_chest_wood")), 0));
+        // Share the dress's matte material rather than inheriting the chest's
+        // building shader and its rain/noise sheen on the pale feathers.
+        var outfit = transform.Find("BH_Outfit").GetComponent<SkinnedMeshRenderer>();
+        plume = DusterPlume.Attach(tool, Visuals.ClothPalette(outfit.sharedMaterial, 0));
         tool.SetParent(belt, true);
         tool.localPosition = Vector3.zero;
         tool.localRotation = Quaternion.identity;
