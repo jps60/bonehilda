@@ -94,13 +94,13 @@ internal sealed class FeatherDuster : MonoBehaviour
         var cycles = elapsed * .79f + .045f * Mathf.Sin(elapsed * 2.1f);
         var phase = cycles * 2f * Mathf.PI;
         var across = Mathf.Sin(phase);
-        var recovery = Mathf.Max(0f, -Mathf.Cos(phase));
+        var speed = Mathf.Abs(Mathf.Cos(phase));
         var surface = data.GetVec3(SurfaceKey, transform.position);
         var height = Mathf.InverseLerp(.45f, 1.10f, surface.y - transform.position.y);
         var strokePoint = surface + transform.right * (Mathf.Lerp(.18f, .30f, height) * across)
-            + transform.forward * (.15f + .075f * Mathf.Cos(phase));
-        var tip = strokePoint + Vector3.up * (.003f + .085f * recovery);
-        var lean = Mathf.Lerp(36f, 18f, height) - 5f * recovery;
+            + transform.forward * (.07f + .035f * speed * speed);
+        var tip = strokePoint + Vector3.up * .003f;
+        var lean = Mathf.Lerp(44f, 21f, height) + 2f * speed;
         var torso = Quaternion.AngleAxis(across * 11f * blend, transform.up)
             * Quaternion.AngleAxis(lean * blend, transform.right);
         spine.rotation = torso * spine.rotation;
@@ -127,7 +127,7 @@ internal sealed class FeatherDuster : MonoBehaviour
         // Account for feather deflection so the loaded stroke keeps skimming the surface.
         var plannedTip = tool.TransformPoint(Vector3.up * DusterPlume.Tip);
         grip.Pronate(elbow, plannedTip, blend);
-        DusterPlume.Bend(plume, tool, transform.right, Mathf.Cos(phase - .22f), 1f - recovery, blend);
+        DusterPlume.Bend(plume, tool, transform.right, Mathf.Cos(phase - .22f), speed, blend);
         SweepArm(shoulder, elbow, DusterPlume.End(plume), plannedTip, blend);
         dust?.Sweep(start, cycles, DusterPlume.End(plume), surface, transform.right);
     }

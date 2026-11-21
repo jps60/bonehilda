@@ -43,7 +43,7 @@ internal sealed class Housekeeping
         deltaToSurface.y = 0;
         var distanceToEdge = deltaToSurface.magnitude;
         // Leave room in front of the apron for the wooden grip throughout the sweep.
-        var spacing = Mathf.Lerp(.83f, .96f, Mathf.InverseLerp(.45f, 1.05f, point.y - maid.transform.position.y))
+        var spacing = Mathf.Lerp(.64f, .88f, Mathf.InverseLerp(.45f, 1.05f, point.y - maid.transform.position.y))
             * (1f + .06f * home.Stars);
         if (!sweeping && distanceToEdge < spacing - .09f)
         {

@@ -41,13 +41,13 @@ internal sealed class DusterGrip
         }
         Socket = Visuals.Child(palm, "BH_DusterGrip");
         // The ferrule leads past the index finger. The tail crosses the heel of the palm.
-        Socket.localPosition = new Vector3(.034f, -.024f, 0f);
-        Socket.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(.74f, .14f, .66f));
+        Socket.localPosition = new Vector3(.018f, .003f, .017f);
+        Socket.localRotation = Quaternion.FromToRotation(Vector3.up, new Vector3(.64f, .92f, 1f));
         thumb = animator.GetBoneTransform(HumanBodyBones.RightThumbProximal);
-        AddFinger(animator, HumanBodyBones.RightIndexProximal, -17f, -66f, -112f);
-        AddFinger(animator, HumanBodyBones.RightMiddleProximal, -32f, -84f, -132f);
-        AddFinger(animator, HumanBodyBones.RightRingProximal, -39f, -92f, -142f);
-        AddFinger(animator, HumanBodyBones.RightLittleProximal, -42f, -95f, -139f);
+        AddFinger(animator, HumanBodyBones.RightIndexProximal, -10f, -100f, -150f);
+        AddFinger(animator, HumanBodyBones.RightMiddleProximal, -46f, -130f, -147f);
+        AddFinger(animator, HumanBodyBones.RightRingProximal, -43f, -127f, -141f);
+        AddFinger(animator, HumanBodyBones.RightLittleProximal, -40f, -71f, -127f);
     }
 
     private void AddFinger(Animator animator, HumanBodyBones finger, params float[] flex)
@@ -76,13 +76,13 @@ internal sealed class DusterGrip
             joint.Rest = joint.Bone.localRotation;
             var segment = Vector3.ProjectOnPlane(joint.Tip.position - joint.Bone.position, palm.forward);
             var angle = Vector3.SignedAngle(palm.right, segment, palm.forward);
-            var bend = Mathf.Clamp(Mathf.DeltaAngle(angle, joint.Flex), -60f, 60f);
+            var bend = Mathf.DeltaAngle(angle, joint.Flex);
             joint.Bone.rotation = Quaternion.AngleAxis(bend * blend, palm.forward) * joint.Bone.rotation;
         }
         if (thumb)
         {
             thumbRest = thumb.localRotation;
-            thumb.rotation = Quaternion.AngleAxis(13f * blend, palm.up) * thumb.rotation;
+            thumb.rotation = Quaternion.AngleAxis(19f * blend, palm.up) * thumb.rotation;
         }
     }
 
