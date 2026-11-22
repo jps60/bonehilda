@@ -18,11 +18,12 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.15";
+    public const string Version = "0.4.16";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
     internal static float RepairReach = 5f;
+    internal static float InteractionReach = 5f;
     internal static float PlayerWalkSpeed = 2f;
     internal static ConfigEntry<float> Radius = null!;
     internal static ConfigEntry<float> ScanInterval = null!;
@@ -69,7 +70,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         WanderRadius = Setting("Maid", "WanderRadius", 5f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
-        DustingInterval = Setting("Maid", "DustingInterval", 15f, "Seconds between performed idle activities (dusting, trophies, or sitting); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 5f, 600f);
+        DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, or sitting); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
         StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
         TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
@@ -112,6 +113,7 @@ public sealed class Plugin : BaseUnityPlugin
             character.m_randomArmor = Array.Empty<GameObject>();
             var player = PrefabManager.Instance.GetPrefab("Player");
             RepairReach = player.GetComponent<Player>().m_maxPlaceDistance;
+            InteractionReach = player.GetComponent<Player>().m_maxInteractDistance;
             PlayerWalkSpeed = player.GetComponent<Player>().m_walkSpeed;
             WorkAnimations.Configure(prefab, player);
             Visuals.Dress(prefab.transform);

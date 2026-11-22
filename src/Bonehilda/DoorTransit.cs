@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using HarmonyLib;
 using UnityEngine;
@@ -13,6 +14,7 @@ internal sealed class DoorTransit
     private static readonly System.Reflection.MethodInfo CanUse = AccessTools.Method(typeof(Door), "CanInteract");
     private float nextCheck;
     private bool blocked;
+    internal string BlockedReason { get; private set; } = "";
 
     internal string Describe(Maid maid)
     {
@@ -25,13 +27,14 @@ internal sealed class DoorTransit
         if (!Plugin.UseDoors.Value) return false;
         if (maid.View.GetZDO().GetZDOID(PendingKey) != ZDOID.None) return true;
         if (Time.time < nextCheck) return blocked;
-        nextCheck = Time.time + .2f; blocked = false;
+        nextCheck = Time.time + .2f; blocked = false; BlockedReason = "";
         var point = goal;
-        if (ai.m_path.Count > 0 && (ai.m_path[0] - maid.transform.position).sqrMagnitude > .1f) point = ai.m_path[0];
+        foreach (var node in ai.m_path)
+            if ((node - maid.transform.position).sqrMagnitude > .25f) { point = node; break; }
         var direction = point - maid.transform.position; direction.y = 0;
         if (direction.sqrMagnitude < .04f) return false;
         foreach (var hit in Physics.SphereCastAll(maid.transform.position + Vector3.up * .8f, .22f,
-                     direction.normalized, Mathf.Min(2.8f, direction.magnitude), LayerMask.GetMask("piece", "piece_nonsolid", "static_solid"), QueryTriggerInteraction.Ignore).OrderBy(h => h.distance))
+                     direction.normalized, Mathf.Min(2.8f, direction.magnitude + .5f), LayerMask.GetMask("piece", "piece_nonsolid", "static_solid"), QueryTriggerInteraction.Ignore).OrderBy(h => h.distance))
         {
             var door = hit.collider.GetComponentInParent<Door>();
             // A wall in front of a door is not a route through that door.
@@ -39,20 +42,28 @@ internal sealed class DoorTransit
             var view = door.GetComponent<ZNetView>();
             if (!view || !view.IsValid() || State(view) != 0) continue;
             blocked = true;
+            BlockedReason = "closed " + Utils.GetPrefabName(door.gameObject);
             var piece = door.GetComponentInParent<Piece>();
             var homeObject = ZNetScene.instance.FindInstance(maid.View.GetZDO().GetZDOID(Maid.HomeKey));
             var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
             if (!piece || !piece.IsPlacedByPlayer() || !home || door.m_keyItem || door.m_canNotBeClosed
-                || !Maid.Allowed(door.transform.position, home!.Piece.GetCreator()) || !Usable(door)
-                || EnemiesNear(maid.GetComponent<Character>(), door.transform.position, maid.transform.position)) return true;
+                || !Maid.Allowed(door.transform.position, home!.Piece.GetCreator()))
+            { BlockedReason += ": locked or no permission"; return true; }
+            if (!Usable(door)) { BlockedReason += ": animating"; return true; }
+            if (EnemiesNear(maid.GetComponent<Character>(), door.transform.position, maid.transform.position))
+            { BlockedReason += ": enemy nearby"; return true; }
             var leased = view.GetZDO().GetZDOID(MaidKey);
-            if (leased != ZDOID.None && leased != maid.View.GetZDO().m_uid && view.GetZDO().GetLong(LeaseKey) > Now) return true;
+            if (leased != ZDOID.None && leased != maid.View.GetZDO().m_uid && view.GetZDO().GetLong(LeaseKey) > Now)
+            { BlockedReason += ": another maid crossing"; return true; }
             Geometry(door, out var center, out var normal, out var clearance);
             var side = Vector3.Dot(maid.transform.position - center, normal) >= 0 ? 1f : -1f;
             var from = center + normal * side * (clearance + .6f);
             var exit = center - normal * side * (clearance + .6f);
             if (!IdleActivities.Floor(from, maid.transform.position.y, out from)
-                || !IdleActivities.Floor(exit, maid.transform.position.y, out exit)) return true;
+                || !IdleActivities.Floor(exit, maid.transform.position.y, out exit)
+                || !MaintenancePolicy.InRadius((exit - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
+                || !Maid.Allowed(exit, home.Piece.GetCreator()) || !RepairGeometry.ClearDoorway(maid, from, exit, door))
+            { BlockedReason += ": blocked or unsupported threshold"; return true; }
             if (!view.IsOwner()) view.ClaimOwnership();
             if (!view.IsOwner() || State(view) != 0 || EnemiesNear(maid.GetComponent<Character>(), center, maid.transform.position)) return true;
             var data = maid.View.GetZDO();
@@ -95,6 +106,8 @@ internal sealed class DoorTransit
             ai.StopMoving();
             if (!Usable(door)) return true;
             data.Set(StageKey, "crossing"); data.Set(StartKey, Now); stage = "crossing";
+            data.Set("BH_doorsOpened", data.GetInt("BH_doorsOpened") + 1);
+            Log(maid, door, "opened");
             elapsed = 0;
             ai.m_path.Clear(); ai.m_lastFindPathTime = -100f;
         }
@@ -128,6 +141,11 @@ internal sealed class DoorTransit
         {
             maid.GetComponent<WorkAnimations>().Interact();
             view.InvokeRPC("UseDoor", false);
+            if (State(view) == 0)
+            {
+                data.Set("BH_doorsClosed", data.GetInt("BH_doorsClosed") + 1);
+                Log(maid, door, "closed");
+            }
         }
         return true;
     }
@@ -135,6 +153,21 @@ internal sealed class DoorTransit
     private static long Now => ZNet.instance.GetTime().Ticks;
     private static int State(ZNetView view) => view.GetZDO().GetInt("state");
     private static bool Usable(Door door) => (bool)CanUse.Invoke(door, null);
+    internal static bool CanPlan(Maid maid, Coffin home, Door door)
+    {
+        var view = door.GetComponent<ZNetView>();
+        var piece = door.GetComponentInParent<Piece>();
+        return view && view.IsValid() && State(view) == 0 && piece && piece.IsPlacedByPlayer()
+            && !door.m_keyItem && !door.m_canNotBeClosed
+            && MaintenancePolicy.InRadius((door.transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
+            && Maid.Allowed(door.transform.position, home.Piece.GetCreator());
+    }
+    private static void Log(Maid maid, Door door, string action)
+    {
+        if (Plugin.ActivityLogging.Value)
+            Plugin.Instance.LogInfo("Bonehilda " + maid.View.GetZDO().m_uid + " " + action + " "
+                + Utils.GetPrefabName(door.gameObject) + " [" + door.GetComponent<ZNetView>().GetZDO().m_uid + "]");
+    }
     private static void Refresh(ZNetView view)
     {
         if (view.IsOwner() && view.GetZDO().GetLong(LeaseKey) < Now + 10L * TimeSpan.TicksPerSecond)
@@ -143,7 +176,7 @@ internal sealed class DoorTransit
     private void Finish(Maid maid, bool failed)
     {
         maid.View.GetZDO().Set(PendingKey, ZDOID.None); maid.View.GetZDO().Set(StageKey, "");
-        blocked = false; nextCheck = 0;
+        blocked = false; nextCheck = 0; BlockedReason = "";
         maid.StopNavigation();
         if (failed) maid.DoorApproachFailed();
     }
@@ -156,7 +189,7 @@ internal sealed class DoorTransit
         return false;
     }
 
-    private static void Geometry(Door door, out Vector3 center, out Vector3 normal, out float clearance)
+    internal static void Geometry(Door door, out Vector3 center, out Vector3 normal, out float clearance)
     {
         var colliders = door.GetComponentsInChildren<Collider>().Where(c => c.enabled && !c.isTrigger).ToArray();
         var bounds = colliders.Length == 0 ? new Bounds(door.transform.position + Vector3.up, new Vector3(1, 2, .3f)) : colliders[0].bounds;
@@ -192,6 +225,9 @@ internal sealed class DoorTransit
 
 internal sealed class MaidDoorWatch : MonoBehaviour
 {
+    internal static readonly HashSet<Door> Loaded = new HashSet<Door>();
+    private void OnEnable() => Loaded.Add(GetComponent<Door>());
+    private void OnDisable() => Loaded.Remove(GetComponent<Door>());
     private float nextCheck;
     private void Update()
     {

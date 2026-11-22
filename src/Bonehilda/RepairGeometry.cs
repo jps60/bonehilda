@@ -91,6 +91,33 @@ internal static class RepairGeometry
     internal static bool ClearLastStep(Maid maid, Vector3 destination)
         => ClearWalk(maid, destination, 1.2f);
 
+    internal static bool ClearDoorway(Maid maid, Vector3 from, Vector3 to, Door door)
+        => ClearDoorway(maid.GetComponent<CapsuleCollider>(), from, to, door);
+
+    internal static bool ClearDoorway(CapsuleCollider capsule, Vector3 from, Vector3 to, Door door)
+    {
+        // Ignore only this door's colliders in this query. Adjacent walls,
+        // furniture, terrain, and unsupported thresholds still reject a route.
+        var offset = to - from;
+        if (Mathf.Abs(offset.y) > .45f) return false;
+        var samples = Mathf.Max(1, Mathf.CeilToInt(offset.magnitude / .4f));
+        var previousY = from.y;
+        for (var i = 0; i <= samples; i++)
+        {
+            var feet = Vector3.Lerp(from, to, i / (float)samples);
+            var floor = Physics.RaycastAll(feet + Vector3.up * .4f, Vector3.down, .85f, Solids, QueryTriggerInteraction.Ignore)
+                .Where(h => h.collider.GetComponentInParent<Door>() != door).OrderBy(h => h.distance).FirstOrDefault();
+            if (!floor.collider || !RepairApproachPolicy.SupportsStep(previousY, floor.point.y, floor.normal.y)) return false;
+            feet.y = floor.point.y + .03f; previousY = floor.point.y;
+            Body(capsule, feet, out var bottom, out var top, out var radius);
+            if (Physics.OverlapCapsule(bottom, top, radius, Solids, QueryTriggerInteraction.Ignore)
+                .Any(c => c.GetComponentInParent<Door>() != door)) return false;
+        }
+        Body(capsule, from, out var startBottom, out var startTop, out var startRadius);
+        return !Physics.CapsuleCastAll(startBottom, startTop, startRadius, offset.normalized, offset.magnitude,
+            Solids, QueryTriggerInteraction.Ignore).Any(h => h.collider.GetComponentInParent<Door>() != door);
+    }
+
     internal static bool ClearWalk(Maid maid, Vector3 destination, float maxDistance = 4.5f)
         => ClearWalk(maid.GetComponent<CapsuleCollider>(), maid.transform.position, destination, maxDistance);
 

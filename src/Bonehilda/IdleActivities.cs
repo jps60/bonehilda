@@ -10,10 +10,21 @@ internal sealed class IdleActivities
     private readonly Housekeeping dust = new Housekeeping();
     private readonly TrophyVisits trophy = new TrophyVisits();
     private readonly ChairVisits chair = new ChairVisits();
+    private readonly Dictionary<ZDOID, float> blocked = new Dictionary<ZDOID, float>();
     private int active;
     private Piece? Target => active == IdleDeck.Dust ? dust.Target : active == IdleDeck.Trophy ? trophy.Target : chair.Target;
     internal string Describe => active == IdleDeck.Dust ? "dust: " + dust.Describe
         : active == IdleDeck.Trophy ? "trophy: " + trophy.Describe : active == IdleDeck.Sit ? "chair: " + chair.Describe : "wandering / cooldown";
+
+    internal bool Available(Piece piece)
+    {
+        var view = piece.GetComponent<ZNetView>();
+        if (!view || !view.IsValid()) return false;
+        var id = view.GetZDO().m_uid;
+        if (!blocked.TryGetValue(id, out var until)) return true;
+        if (Time.time < until) return false;
+        blocked.Remove(id); return true;
+    }
 
     internal bool Tick(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces, float delta)
     {
@@ -41,10 +52,17 @@ internal sealed class IdleActivities
             if (!Target || !TaskClaims.TryClaim(maid, Target!, "idle: " + active, work: false)) { Cancel(maid); return false; }
         }
         if (!Target || !TaskClaims.Holds(maid, Target!, work: false)) { Cancel(maid); return false; }
+        var attemptedTarget = Target;
         var running = active == IdleDeck.Dust ? dust.Tick(maid, ai, home, delta)
             : active == IdleDeck.Trophy ? Plugin.TrophyReactions.Value && trophy.Tick(maid, ai, home, delta)
             : Plugin.IdleSitting.Value && chair.Tick(maid, ai, home, delta);
         if (running) return true;
+        var performed = active == IdleDeck.Dust ? dust.Performed : active == IdleDeck.Trophy ? trophy.Performed : chair.Performed;
+        if (!performed && attemptedTarget)
+        {
+            var view = attemptedTarget!.GetComponent<ZNetView>();
+            if (view && view.IsValid()) blocked[view.GetZDO().m_uid] = Time.time + 60f;
+        }
         Cancel(maid);
         return false;
     }

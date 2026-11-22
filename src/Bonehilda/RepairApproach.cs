@@ -12,6 +12,8 @@ internal sealed class RepairApproach
     private readonly List<Vector3> path = new List<Vector3>();
     private readonly List<Vector3> bestPath = new List<Vector3>();
     private Piece? target;
+    private bool repairMode = true;
+    private Vector3 interactionPoint;
     private int cursor, solutions;
     private float topY, bottomY, bestCost, nextSearch, nextValidation;
     private bool chosen, initialized, bestDirect;
@@ -39,10 +41,12 @@ internal sealed class RepairApproach
         chosen = initialized = false; nextSearch = Time.time + 1f; State = "retry delay";
     }
 
-    internal Result Tick(Maid maid, MonsterAI ai, Coffin home, Piece piece, out Vector3 destination)
+    internal Result Tick(Maid maid, MonsterAI ai, Coffin home, Piece piece, out Vector3 destination,
+        bool repairing = true, Vector3 interaction = default)
     {
         destination = best;
-        if (target != piece) { Reset(); target = piece; }
+        if (target != piece || repairMode != repairing) { Reset(); target = piece; repairMode = repairing; }
+        interactionPoint = interaction;
         if (Time.time < nextSearch) return Result.Searching;
         if (chosen)
         {
@@ -75,7 +79,7 @@ internal sealed class RepairApproach
                 if (direct) path.Add(feet);
                 else
                 {
-                    if (!Pathfinding.instance.GetPath(maid.transform.position, feet, path, ai.m_pathAgentType, true, false)
+                    if (!maid.FindWalkPath(home, maid.transform.position, feet, path)
                         || path.Count == 0) { RejectedPath++; continue; }
                     var end = path[path.Count - 1] - feet;
                     if (!RepairApproachPolicy.EndpointMatches(HorizontalSquared(end), end.y)) { RejectedPath++; continue; }
@@ -112,12 +116,12 @@ internal sealed class RepairApproach
         initialized = true; cursor = solutions = 0; columns.Clear(); bestCost = float.PositiveInfinity;
         RejectedSpace = RejectedSight = RejectedPath = 0;
         var feet = maid.transform.position;
-        var anchor = RepairGeometry.Aim(piece, maid.GetComponent<Humanoid>().GetEyePoint());
+        var anchor = repairMode ? RepairGeometry.Aim(piece, maid.GetComponent<Humanoid>().GetEyePoint()) : interactionPoint;
         var bounds = new Bounds(piece.transform.position, Vector3.zero);
         foreach (var collider in piece.GetComponentsInChildren<Collider>())
             if (collider.enabled && !collider.isTrigger) bounds.Encapsulate(collider.bounds);
         topY = Mathf.Max(feet.y + 1f, bounds.max.y + .5f);
-        bottomY = bounds.min.y - Plugin.RepairReach - 2f;
+        bottomY = bounds.min.y - (repairMode ? Plugin.RepairReach : Plugin.InteractionReach) - 2f;
         foreach (var center in new[] { feet, anchor })
         {
             columns.Add(center);
@@ -135,9 +139,15 @@ internal sealed class RepairApproach
     {
         aim = default;
         if (!MaintenancePolicy.InRadius((feet - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
-            || !Maid.Allowed(feet, home.Piece.GetCreator()) || !maid.HasRepairStation(piece, feet) || !RepairGeometry.Fits(maid, feet))
+            || !Maid.Allowed(feet, home.Piece.GetCreator()) || (repairMode && !maid.HasRepairStation(piece, feet)) || !RepairGeometry.Fits(maid, feet))
         { RejectedSpace++; return false; }
         var eyeOffset = maid.GetComponent<Humanoid>().GetEyePoint() - maid.transform.position;
+        if (!repairMode)
+        {
+            aim = interactionPoint;
+            if (maid.WithinSupplyReach(piece, aim, feet, .4f)) return true;
+            RejectedSight++; return false;
+        }
         if (RepairGeometry.VisibleSurface(piece, feet + eyeOffset, Plugin.RepairReach - .4f, out aim)) return true;
         RejectedSight++; return false;
     }

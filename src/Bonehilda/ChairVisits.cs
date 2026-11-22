@@ -23,7 +23,7 @@ internal sealed class ChairVisits
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
         foreach (var piece in pieces)
         {
-            if (!Eligible(piece, home, range) || !TaskClaims.Available(maid, piece, work: false)) continue;
+            if (!Eligible(piece, home, range) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var chair = piece.GetComponent<Chair>();
             if (!chair || chair.m_inShip || !chair.m_attachPoint || !MaidSeating.SupportedPose(chair) || MaidSeating.IsInUse(chair)) continue;
             var point = chair.m_attachPoint.position + chair.transform.forward;
@@ -32,6 +32,7 @@ internal sealed class ChairVisits
             var distance = (point - maid.transform.position).sqrMagnitude;
             var recent = TaskClaims.Recent(piece);
             if (!TaskClaimPolicy.Prefer(recent, distance, bestRecent, best)) continue;
+            if (!maid.CanIdleApproach(home, point)) continue;
             best = distance; target = chair; approach = point;
             bestRecent = recent;
         }

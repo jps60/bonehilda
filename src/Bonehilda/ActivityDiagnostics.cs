@@ -23,6 +23,14 @@ internal sealed class MaidActivity
     public int repairRejectedSpace, repairRejectedSight, repairRejectedPath;
     public bool workAccepted;
     public string movementPace = "";
+    public string doorBlockedReason = "", doorPlan = "";
+    public int doorsOpened, doorsClosed;
+    public string supplyApproach = "", animatorClips = "";
+    public Vector3 supplyStandingPoint;
+    public int supplyRetries;
+    public float interactionReach;
+    public bool dustingPose, seated;
+    public int stepJumps;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour
@@ -47,7 +55,7 @@ internal sealed class ActivityDiagnostics : MonoBehaviour
         File.WriteAllText(SnapshotPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records, pretty: true));
         if (File.Exists(HistoryPath) && new FileInfo(HistoryPath).Length > 2 * 1024 * 1024) File.WriteAllText(HistoryPath, "");
         File.AppendAllText(HistoryPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records) + Environment.NewLine);
-        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; pace={m.movementPace}; accepted={m.workAccepted}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; claim={m.reservation}"))
+        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; pace={m.movementPace}; accepted={m.workAccepted}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; doorPlan={m.doorPlan}; blocked={m.doorBlockedReason}; opened/closed={m.doorsOpened}/{m.doorsClosed}; claim={m.reservation}"))
             + "\nSnapshot: " + SnapshotPath;
     }
 }

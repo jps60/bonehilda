@@ -25,11 +25,15 @@ internal sealed class Housekeeping
         var bestRecent = long.MaxValue;
         foreach (var piece in pieces)
         {
-            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange) || !TaskClaims.Available(maid, piece, work: false)) continue;
+            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var d = (piece.transform.position - maid.transform.position).sqrMagnitude + (piece == previous ? 10000f : 0f);
             var recent = TaskClaims.Recent(piece);
             if (!TaskClaimPolicy.Prefer(recent, d, bestRecent, distance)) continue;
             if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
+            var direction = candidatePoint - maid.transform.position; direction.y = 0;
+            if (direction.sqrMagnitude < .01f) direction = maid.transform.forward;
+            var standing = candidatePoint - direction.normalized * .95f;
+            if (!IdleActivities.Floor(standing, maid.transform.position.y, out standing) || !maid.CanIdleApproach(home, standing)) continue;
             target = piece;
             localPoint = piece.transform.InverseTransformPoint(candidatePoint);
             distance = d;

@@ -13,6 +13,7 @@ internal sealed class FeatherDuster : MonoBehaviour
     internal const string FarKey = "BH_dustFar";
     private const float Settle = .42f;
     internal const float Seconds = Settle + DustingRoutine.WorkingSeconds + .40f;
+    internal bool IsPosed => posed;
     // A deliberate reach, a short turn, then a quicker gathering stroke.
     private static readonly AnimationCurve Travel = new AnimationCurve(
         new Keyframe(0f, 0f, 0f, 0f), new Keyframe(.26f, .49f, 2.6f, 2.6f),

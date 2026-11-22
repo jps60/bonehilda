@@ -39,7 +39,7 @@ internal sealed class TrophyVisits
         var previous = maid.View.GetZDO().GetZDOID("BH_lastTrophy");
         foreach (var piece in pieces)
         {
-            if (!Eligible(piece, home) || !TaskClaims.Available(maid, piece, work: false)) continue;
+            if (!Eligible(piece, home) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var stand = piece.GetComponent<ItemStand>();
             if (!stand) continue;
             var name = ItemName(stand);
@@ -58,6 +58,7 @@ internal sealed class TrophyVisits
             if (view && view.IsValid() && view.GetZDO().m_uid == previous) score += 10000f;
             var recent = TaskClaims.Recent(piece);
             if (!TaskClaimPolicy.Prefer(recent, score, bestRecent, best)) continue;
+            if (!maid.CanIdleApproach(home, point)) continue;
             best = score; target = stand; item = name; standingPoint = point;
             bestRecent = recent;
         }
