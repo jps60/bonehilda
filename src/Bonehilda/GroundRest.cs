@@ -21,9 +21,10 @@ internal sealed class GroundRest
     {
         target = null; resting = Performed = false;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
+        var revisit = Plugin.NaturalRoutines.Value && Random.value < .6f;
         // Warmth is a preference; an unobstructed ordinary patch is the fallback.
         foreach (var piece in pieces.Where(p => p && p.IsPlacedByPlayer() && !p.GetComponentInParent<Ship>())
-                     .OrderBy(p => (p.transform.position - maid.transform.position).sqrMagnitude))
+                     .OrderBy(p => RoutinePolicy.RestScore((p.transform.position - maid.transform.position).sqrMagnitude, IdleRoutine.Favorite(maid, p), revisit)))
         {
             var fire = piece.GetComponentInChildren<Fireplace>();
             var fireView = fire ? fire!.GetComponent<ZNetView>() : null;
@@ -43,10 +44,13 @@ internal sealed class GroundRest
     private bool ChooseSpot(Maid maid, Coffin home, Piece anchor, Vector3 center, float radius, float range, bool fire)
     {
         var best = float.PositiveInfinity;
-        for (var i = 0; i < 12; i++)
+        var favorite = Plugin.NaturalRoutines.Value && IdleRoutine.Favorite(maid, anchor) && Random.value < .6f;
+        for (var i = -1; i < 12; i++)
         {
+            if (i == -1 && !favorite) continue;
             var angle = i * Mathf.PI * 2f / 12f;
-            var candidate = center + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
+            var candidate = i == -1 ? anchor.transform.TransformPoint(maid.View.GetZDO().GetVec3("BH_favoriteRestPoint", Vector3.zero))
+                : center + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
             if (!IdleActivities.Floor(candidate, anchor.transform.position.y, out candidate)
                 || (candidate - home.transform.position).sqrMagnitude > range * range
                 || (fire && Mathf.Abs(candidate.y - anchor.transform.position.y) > 1.5f)
@@ -58,6 +62,7 @@ internal sealed class GroundRest
             if (fire && Physics.Linecast(candidate + Vector3.up * .8f, center, out var hit, RepairGeometry.Solids,
                     QueryTriggerInteraction.Ignore) && hit.collider.GetComponentInParent<Piece>() != anchor) continue;
             best = distance; point = candidate; look = center; target = anchor;
+            if (i == -1) break; // A remembered spot still passes every safety/path check.
         }
         deadline = Time.time + 20f;
         return target;
@@ -96,9 +101,10 @@ internal sealed class GroundRest
         maid.StopNavigation(); ai.StopMoving(); ai.LookAt(look);
         var facing = look - maid.transform.position; facing.y = 0;
         if (facing.sqrMagnitude > .01f && Vector3.Dot(maid.transform.forward, facing.normalized) < .85f) return true;
-        emote = Random.value < .5f ? "sit" : "relax";
+        emote = IdleRoutine.Gesture(maid, "rest", new[] { "sit", "relax" });
         maid.GetComponent<WorkAnimations>().RestEmote(emote);
         resting = Performed = true;
+        IdleRoutine.RememberRest(maid, target!, point);
         nextRoll = Time.time + Plugin.SittingCheckInterval.Value;
         return true;
     }

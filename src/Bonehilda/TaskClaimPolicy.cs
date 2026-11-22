@@ -18,9 +18,6 @@ internal static class TaskClaimPolicy
     internal static bool Prefer(long recentStart, float distance, long bestStart, float bestDistance) =>
         recentStart < bestStart || (recentStart == bestStart && distance < bestDistance);
 
-    internal static bool PreferWork(bool supplies, bool bestSupplies, long recentStart, float distance, long bestStart, float bestDistance) =>
-        supplies != bestSupplies ? supplies : Prefer(recentStart, distance, bestStart, bestDistance);
-
     internal static TaskClaim? Winner(IEnumerable<TaskClaim> claims, string target, long now)
     {
         TaskClaim? winner = null;

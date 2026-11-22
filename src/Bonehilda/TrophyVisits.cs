@@ -86,7 +86,7 @@ internal sealed class TrophyVisits
         if (!reacting && Vector3.Dot(maid.transform.forward, facing.normalized) > .9f)
         {
             var choices = TrophyEmotes.Map[item];
-            maid.GetComponent<WorkAnimations>().Emote(choices[Random.Range(0, choices.Length)], 5f);
+            maid.GetComponent<WorkAnimations>().Emote(IdleRoutine.Gesture(maid, item, choices), 5f);
             maid.View.GetZDO().Set("BH_lastTrophy", target.GetComponent<ZNetView>().GetZDO().m_uid);
             reacting = true;
             Performed = true;

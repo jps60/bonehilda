@@ -31,6 +31,8 @@ internal sealed class SupplyTarget
     }
 
     internal bool NeedsItem => Consumer && Resource && needsItem();
+    internal bool Depleted => NeedsItem && (Kind == SupplyKind.FireplaceFuel || Kind == SupplyKind.MachineFuel
+        || Kind == SupplyKind.ShieldFuel || Kind == SupplyKind.Ammunition) && amount() < 1f;
     internal bool Matches(ItemDrop.ItemData item) => Resource && item.m_dropPrefab &&
         Utils.GetPrefabName(item.m_dropPrefab) == Utils.GetPrefabName(Resource.gameObject);
 

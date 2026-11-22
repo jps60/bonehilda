@@ -2,6 +2,31 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("summoned skeletts are social acquaintances", SocialPolicy.Classify("Skeleton_Friendly(Clone)", false, true, false, false, false, false) == SocialKind.Skeleton),
+    ("skelette prefab variants are recognized", SocialPolicy.Classify("Skelette(Clone)", false, true, false, false, false, false) == SocialKind.Skeleton),
+    ("wild hostile skeletons are never greeted", SocialPolicy.Classify("Skeleton", false, false, false, true, false, false) == SocialKind.None),
+    ("tamed wolves get affectionate gestures", SocialPolicy.Classify("Wolf", false, true, false, false, false, false) == SocialKind.Tame),
+    ("idle maids use coworker greetings", SocialPolicy.Classify("BH_Bonehilda", true, true, false, false, false, false) == SocialKind.Maid),
+    ("working or dismissed maids are left alone", SocialPolicy.Classify("BH_Bonehilda", true, true, false, false, false, true) == SocialKind.None),
+    ("dead tames are never visited", SocialPolicy.Classify("Wolf", false, true, false, false, true, false) == SocialKind.None),
+    ("player characters are excluded", SocialPolicy.Classify("Player", false, true, true, false, false, false) == SocialKind.None),
+    ("ordinary wild animals are excluded", SocialPolicy.Classify("Deer", false, false, false, false, false, false) == SocialKind.None),
+    ("sleeping or alerted tames are excluded", SocialPolicy.Classify("Wolf", false, true, false, false, false, true) == SocialKind.None),
+    ("small acquaintance movements are tolerated", SocialPolicy.InPlace(.99f, .5f)),
+    ("departing acquaintances are not chased", !SocialPolicy.InPlace(1.01f, 0)),
+    ("targets on another floor end the visit", !SocialPolicy.InPlace(0, .76f)),
+    ("social cooldown remains active before expiry", SocialPolicy.CoolingDown(99, 100)),
+    ("social cooldown expires at its deadline", !SocialPolicy.CoolingDown(100, 100)),
+    ("two gestures always alternate", RoutinePolicy.Gesture(2, 0, 0) == 1 && RoutinePolicy.Gesture(2, 1, .99f) == 0),
+    ("first gesture can choose either option", RoutinePolicy.Gesture(2, -1, 0) == 0 && RoutinePolicy.Gesture(2, -1, .99f) == 1),
+    ("one-option gestures remain valid", RoutinePolicy.Gesture(1, 0, .99f) == 0),
+    ("critical damage outranks depleted fuel", RoutinePolicy.WorkPriority(false, true, false, true) < RoutinePolicy.WorkPriority(true, false, true, true)),
+    ("depleted fuel outranks an ordinary preferred repair", RoutinePolicy.WorkPriority(true, false, true, false) < RoutinePolicy.WorkPriority(false, false, false, false)),
+    ("three successful supplies switch ordinary preference to repairs", !RoutinePolicy.NextPreference(true, 3)),
+    ("repair bouts retain preference until third success", !RoutinePolicy.NextPreference(false, 2) && RoutinePolicy.NextPreference(false, 3)),
+    ("failed actions do not advance work streak policy", RoutinePolicy.NextPreference(true, 0)),
+    ("occasional favorite rest visits outweigh a modest distance difference", RoutinePolicy.RestScore(10, true, true) < RoutinePolicy.RestScore(2, false, true)),
+    ("ordinary rest choices keep distance ordering", RoutinePolicy.RestScore(10, true, false) == 10),
     ("small player-sized threshold is stepped over", StepPolicy.Walk(.25f, 1) && !StepPolicy.Jump(.25f, 1)),
     ("forty centimeters remains a walking step", StepPolicy.Walk(.4f, 1) && !StepPolicy.Jump(.4f, 1)),
     ("larger ledge retains the jump animation", !StepPolicy.Walk(.5f, 1) && StepPolicy.Jump(.5f, 1)),
@@ -77,10 +102,10 @@ var checks = new (string Name, bool Passed)[]
     ("a drop is not a ledge to jump onto", !DoorPolicy.SmallLedge(-.3f, 1)),
     ("a high wall is not a small ledge", !DoorPolicy.SmallLedge(.66f, 1)),
     ("steep landing prevents a ledge jump", !DoorPolicy.SmallLedge(.3f, .64f)),
-    ("available supplies outrank another rain-damaged repair", TaskClaimPolicy.PreferWork(true, false, 100, 100, 0, 1)),
-    ("repair chaining cannot displace waiting fuel", !TaskClaimPolicy.PreferWork(false, true, 0, 1, 100, 100)),
-    ("supply destinations retain oldest-first fairness", TaskClaimPolicy.PreferWork(true, true, 20, 50, 30, 1)),
-    ("repair destinations retain nearest ordering when equally recent", TaskClaimPolicy.PreferWork(false, false, 0, 2, 0, 10)),
+    ("ordinary supplies begin ahead of rain damage", RoutinePolicy.WorkPriority(true, false, false, true) < RoutinePolicy.WorkPriority(false, false, false, true)),
+    ("ordinary repairs get a turn ahead of top-offs", RoutinePolicy.WorkPriority(false, false, false, false) < RoutinePolicy.WorkPriority(true, false, false, false)),
+    ("equally urgent destinations retain oldest-first fairness", TaskClaimPolicy.Prefer(20, 50, 30, 1)),
+    ("equally recent destinations retain nearest ordering", TaskClaimPolicy.Prefer(0, 2, 0, 10)),
     ("shorter idle interval schedules activities after eight seconds", IdleTiming.Delay(8, true, 0) == 8),
     ("idle variation caps the new default at twelve seconds", IdleTiming.Delay(8, true, 1) == 12),
     ("upper floor within player interaction reach can be supplied", MaintenancePolicy.InRepairReach(4.9f * 4.9f, 5)),
@@ -385,6 +410,18 @@ static IEnumerable<(string Name, bool Passed)> IdleChecks()
     }
     yield return ("idle deck visits all available activities before refilling", noRepeat && seen == 7 && remaining == 0);
     yield return ("refilled deck avoids immediate repetition", IdleDeck.Choose(7, ref remaining, previous, .99f) != previous);
+    remaining = 0; seen = 0; previous = 0; noRepeat = true;
+    for (var i = 0; i < 4; i++)
+    {
+        var choice = IdleDeck.Choose(15, ref remaining, previous, .7f);
+        noRepeat &= choice != 0 && (seen & choice) == 0;
+        seen |= choice; previous = choice;
+    }
+    yield return ("social visits participate in a complete four-activity deck", noRepeat && seen == 15 && remaining == 0);
+    remaining = 0;
+    yield return ("a lone social opportunity can be selected", IdleDeck.Choose(IdleDeck.Social, ref remaining, 0, 0) == IdleDeck.Social);
+    foreach (var kind in new[] { SocialKind.Skeleton, SocialKind.Tame, SocialKind.Maid, SocialKind.Odin })
+        yield return ($"social gestures exist for {kind}", SocialPolicy.Emotes.TryGetValue(kind, out var gestures) && gestures.Length == 2 && gestures.Distinct().Count() == 2);
     remaining = 7;
     yield return ("disabled activities are never selected", IdleDeck.Choose(1, ref remaining, 0, .99f) == 1);
     yield return ("an unavailable deck is empty", IdleDeck.Choose(0, ref remaining, 0, .5f) == 0);

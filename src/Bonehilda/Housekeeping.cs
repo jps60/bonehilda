@@ -102,6 +102,7 @@ internal sealed class Housekeeping
             data.Set(FeatherDuster.StartKey, ZNet.instance.GetTime().Ticks);
             sweeping = true;
             Performed = true;
+            WorkSounds.IdleVoice(maid, .6f);
             deadline = Time.time + FeatherDuster.Seconds;
         }
         return true;

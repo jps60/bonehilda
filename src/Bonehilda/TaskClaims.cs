@@ -30,17 +30,22 @@ internal static class TaskClaims
     }
 
     internal static bool Available(Maid maid, Piece target, bool work)
+        => Available(maid, target.GetComponent<ZNetView>(), work);
+
+    internal static bool Available(Maid maid, ZNetView view, bool work)
     {
-        var view = target.GetComponent<ZNetView>();
         return view && view.IsValid() && TaskClaimPolicy.Available(Active(), view.GetZDO().m_uid.ToString(),
             maid.View.GetZDO().m_uid.ToString(), work, Now);
     }
 
     internal static bool TryClaim(Maid maid, Piece target, string kind, bool work)
+        => TryClaim(maid, target.GetComponent<ZNetView>(), kind, work);
+
+    internal static bool TryClaim(Maid maid, ZNetView target, string kind, bool work)
     {
         if (!maid.View.IsOwner() || !Available(maid, target, work)) return false;
         var data = maid.View.GetZDO();
-        var id = target.GetComponent<ZNetView>().GetZDO().m_uid;
+        var id = target.GetZDO().m_uid;
         // Reasserting the same claim must not change its place in arbitration.
         if (data.GetZDOID(TargetKey) != id || data.GetString(KindKey) != kind || data.GetLong(UntilKey) <= Now)
             data.Set(StartKey, Now);
@@ -76,8 +81,10 @@ internal static class TaskClaims
     }
 
     internal static bool Holds(Maid maid, Piece target, bool work)
+        => Holds(maid, target.GetComponent<ZNetView>(), work);
+
+    internal static bool Holds(Maid maid, ZNetView view, bool work)
     {
-        var view = target.GetComponent<ZNetView>();
         if (!view || !view.IsValid()) return false;
         var own = Read(maid);
         if (own.Work != work || own.Target != view.GetZDO().m_uid.ToString()) return false;

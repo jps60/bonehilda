@@ -24,6 +24,7 @@ internal sealed class ChairVisits
         var best = float.PositiveInfinity;
         var bestRecent = long.MaxValue;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
+        var revisit = Plugin.NaturalRoutines.Value && Random.value < .6f;
         foreach (var piece in pieces)
         {
             if (!Eligible(piece, home, range) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
@@ -32,7 +33,7 @@ internal sealed class ChairVisits
             var point = chair.m_attachPoint.position + chair.transform.forward;
             if (!IdleActivities.Floor(point, piece.transform.position.y, out point)) continue;
             if ((point - home.transform.position).sqrMagnitude > Plugin.Radius.Value * Plugin.Radius.Value) continue;
-            var distance = (point - maid.transform.position).sqrMagnitude;
+            var distance = RoutinePolicy.RestScore((point - maid.transform.position).sqrMagnitude, IdleRoutine.Favorite(maid, piece), revisit);
             var recent = TaskClaims.Recent(piece);
             if (!TaskClaimPolicy.Prefer(recent, distance, bestRecent, best)) continue;
             if (!maid.CanIdleApproach(home, point)) continue;
@@ -74,6 +75,8 @@ internal sealed class ChairVisits
         if (!seat.Sit(target)) return false;
         sitting = true;
         chairPerformed = true;
+        IdleRoutine.RememberRest(maid, target.GetComponent<Piece>(), target.m_attachPoint.position);
+        WorkSounds.IdleVoice(maid, .4f);
         nextRoll = Time.time + Plugin.SittingCheckInterval.Value;
         return true;
     }

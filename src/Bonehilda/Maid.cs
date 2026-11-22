@@ -20,6 +20,10 @@ public sealed class Maid : MonoBehaviour
     internal ZNetView View { get; private set; } = null!;
     internal bool HasCargo => cargo != null && cargo.GetAllItems().Count > 0;
     internal bool Stepping => ledges.Stepping;
+    internal bool AvailableForSocial => View && View.IsValid() && !OffDuty && !InCoffinPassage(View.GetZDO())
+        && !HasCargo && job?.Accepted != true && phase == WorkPhase.None && !Stepping
+        && !(View.GetZDO().GetBool("BH_taskWork") && View.GetZDO().GetLong("BH_taskUntil") > ZNet.instance.GetTime().Ticks)
+        && View.GetZDO().GetZDOID("BH_openDoor") == ZDOID.None;
     internal bool OffDuty => View && View.IsValid() && (View.GetZDO().GetBool(ReturningKey) || View.GetZDO().GetBool("BH_stowing"));
     internal static bool InCoffinPassage(ZDO data) =>
         data.GetBool("BH_entering") || data.GetBool(ExitingKey) || data.GetBool("BH_stowing");
@@ -180,6 +184,13 @@ public sealed class Maid : MonoBehaviour
         home.Set("BH_storedNameAuthor", View.GetZDO().GetString("TamedNameAuthor"));
         home.Set("BH_storedLastDelivery", View.GetZDO().GetLong(LastDeliveryKey));
         home.Set("BH_storedNextDust", View.GetZDO().GetLong(IdleActivities.NextVisitKey));
+        home.Set("BH_favoriteRest", View.GetZDO().GetZDOID("BH_favoriteRest"));
+        home.Set("BH_favoriteRestPoint", View.GetZDO().GetVec3("BH_favoriteRestPoint", Vector3.zero));
+        home.Set("BH_lastWorkSupply", View.GetZDO().GetBool("BH_lastWorkSupply", true));
+        home.Set("BH_workStreak", View.GetZDO().GetInt("BH_workStreak"));
+        home.Set("BH_lastSocial", View.GetZDO().GetZDOID("BH_lastSocial"));
+        home.Set("BH_lastSocialUntil", View.GetZDO().GetLong("BH_lastSocialUntil"));
+        home.Set("BH_nextVoice", View.GetZDO().GetLong("BH_nextVoice"));
     }
 
     internal void RestoreStored(ZDO home)
@@ -189,6 +200,13 @@ public sealed class Maid : MonoBehaviour
         View.GetZDO().Set("TamedNameAuthor", home.GetString("BH_storedNameAuthor"));
         View.GetZDO().Set(LastDeliveryKey, home.GetLong("BH_storedLastDelivery"));
         View.GetZDO().Set(IdleActivities.NextVisitKey, home.GetLong("BH_storedNextDust"));
+        View.GetZDO().Set("BH_favoriteRest", home.GetZDOID("BH_favoriteRest"));
+        View.GetZDO().Set("BH_favoriteRestPoint", home.GetVec3("BH_favoriteRestPoint", Vector3.zero));
+        View.GetZDO().Set("BH_lastWorkSupply", home.GetBool("BH_lastWorkSupply", true));
+        View.GetZDO().Set("BH_workStreak", home.GetInt("BH_workStreak"));
+        View.GetZDO().Set("BH_lastSocial", home.GetZDOID("BH_lastSocial"));
+        View.GetZDO().Set("BH_lastSocialUntil", home.GetLong("BH_lastSocialUntil"));
+        View.GetZDO().Set("BH_nextVoice", home.GetLong("BH_nextVoice"));
     }
 
     private void EnsureDefaultName()
@@ -559,7 +577,11 @@ public sealed class Maid : MonoBehaviour
                 break;
             case WorkPhase.Repairing:
                 // Commit at the swing, after checking the target again. No combat attack is started.
-                if (Valid(job, home) && WithinRepairReach(job.Piece, point) && job.Wear!.Repair()) WorkSounds.Repair(job.Piece);
+                if (Valid(job, home) && WithinRepairReach(job.Piece, point) && job.Wear!.Repair())
+                {
+                    WorkSounds.Repair(job.Piece);
+                    RememberWork(false);
+                }
                 nextAction = Time.time + Plugin.WorkInterval.Value;
                 SetPhase(WorkPhase.Recovering, 0.35f);
                 break;
@@ -623,6 +645,23 @@ public sealed class Maid : MonoBehaviour
         View.GetZDO().Set(LastDeliveryKey, ZNet.instance.GetTime().Ticks);
         lastSupplied[SupplyKey(delivery)] = Time.time;
         WorkSounds.Supplied(delivery.Supply);
+        RememberWork(true);
+    }
+
+    private void RememberWork(bool supplied)
+    {
+        var data = View.GetZDO();
+        var streak = data.GetBool("BH_lastWorkSupply", true) == supplied ? data.GetInt("BH_workStreak") + 1 : 1;
+        data.Set("BH_lastWorkSupply", supplied);
+        data.Set("BH_workStreak", Mathf.Min(3, streak));
+    }
+
+    private int WorkPriority(Job candidate)
+    {
+        if (!Plugin.NaturalRoutines.Value) return candidate.Supply != null ? 0 : 1;
+        var data = View.GetZDO();
+        return RoutinePolicy.WorkPriority(candidate.Supply != null, candidate.Wear && candidate.Wear!.GetHealthPercentage() <= .25f,
+            candidate.Supply?.Depleted == true, RoutinePolicy.NextPreference(data.GetBool("BH_lastWorkSupply", true), data.GetInt("BH_workStreak")));
     }
 
     private Job? FindJob(Coffin home, bool suppliesOnly = false)
@@ -646,14 +685,18 @@ public sealed class Maid : MonoBehaviour
                 .Where(option => Enabled(option) && option.NeedsItem && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
                 .OrderBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
-            if (candidate.Supply == null)
+            var criticalRepair = Plugin.NaturalRoutines.Value && !suppliesOnly && !HasCargo && Plugin.Repair.Value
+                && wear && wear.GetHealthPercentage() <= .25f && HasRepairStation(piece);
+            if (criticalRepair) { candidate.Supply = null; candidate.Wear = wear; }
+            else if (candidate.Supply == null)
             {
                 if (!suppliesOnly && Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage()) && HasRepairStation(piece)) candidate.Wear = wear;
                 else continue;
             }
             var distance = (piece.transform.position - transform.position).sqrMagnitude;
             var recent = TaskClaims.Recent(piece);
-            if (best != null && !TaskClaimPolicy.PreferWork(candidate.Supply != null, best.Supply != null, recent, distance, bestRecent, bestDistance)) continue;
+            if (best != null && (WorkPriority(candidate) > WorkPriority(best)
+                || WorkPriority(candidate) == WorkPriority(best) && !TaskClaimPolicy.Prefer(recent, distance, bestRecent, bestDistance))) continue;
             best = candidate;
             bestDistance = distance;
             bestRecent = recent;
@@ -815,6 +858,7 @@ public sealed class Maid : MonoBehaviour
         => doorRoutes.TryPath(this, ai, home, from, goal, path);
 
     internal bool CanIdleVisit(Piece piece) => idle.Available(piece);
+    internal bool CanIdleVisit(ZNetView view) => idle.Available(view);
     internal void PauseToStand() => standUntil = Mathf.Max(standUntil, Time.time + .8f);
     internal void StepToward(Vector3 point, float delta) => ledges.Tick(this, ai, point, delta);
 

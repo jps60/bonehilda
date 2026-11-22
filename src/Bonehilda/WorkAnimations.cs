@@ -139,6 +139,7 @@ internal sealed class WorkAnimations : MonoBehaviour
         data.Set(EmoteKey, name);
         data.Set(EmoteEnd, until);
         data.Set(EmoteId, data.GetInt(EmoteId) + 1);
+        WorkSounds.IdleVoice(GetComponent<Maid>(), name == "sit" || name == "relax" || name == "bow" || name == "kneel" ? .4f : 1f);
     }
 
     internal void StopEmote()

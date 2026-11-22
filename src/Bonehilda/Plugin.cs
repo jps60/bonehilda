@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.17";
+    public const string Version = "0.4.18";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -42,6 +42,12 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> TrophyReactions = null!;
     internal static ConfigEntry<float> TrophyDistance = null!;
     internal static ConfigEntry<bool> IdleSitting = null!;
+    internal static ConfigEntry<bool> SocialVisits = null!;
+    internal static ConfigEntry<float> SocialRadius = null!;
+    internal static ConfigEntry<float> SocialTargetCooldown = null!;
+    internal static ConfigEntry<bool> NaturalRoutines = null!;
+    internal static ConfigEntry<float> IdleVoiceChance = null!;
+    internal static ConfigEntry<float> IdleVoiceCooldown = null!;
     internal static ConfigEntry<float> SittingCheckInterval = null!;
     internal static ConfigEntry<float> SittingContinueChance = null!;
     internal static ConfigEntry<bool> UseDoors = null!;
@@ -70,7 +76,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         WanderRadius = Setting("Maid", "WanderRadius", 5f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
-        DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, or sitting); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
+        DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, sitting, or social visits); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
         StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
         TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
@@ -78,6 +84,14 @@ public sealed class Plugin : BaseUnityPlugin
         IdleSitting = Config.Bind("Maid", "IdleSitting", true, new ConfigDescription("Use nearby unoccupied chairs, or sit/relax on clear ground when none is suitable, preferring a burning fire. Work and dismissal interrupt sitting.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         SittingCheckInterval = Setting("Maid", "SittingCheckInterval", 10f, "Seconds between rolls to leave an idle chair.", 5f, 120f);
+        SocialVisits = Config.Bind("Maid", "SocialVisits", true, new ConfigDescription("Cosmetic greetings to calm friendly skeletons, tames, available maids, and Odin. Work and nearby enemies interrupt visits; other NPC behavior is unchanged.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        SocialRadius = Setting("Maid", "SocialRadius", 10f, "Social visit distance from the coffin, capped by the work radius. Moving acquaintances are not chased.", 2f, 50f);
+        SocialTargetCooldown = Setting("Maid", "SocialTargetCooldown", 90f, "Minimum seconds between greetings to the same acquaintance by this maid.", 15f, 600f);
+        NaturalRoutines = Config.Bind("Maid", "NaturalRoutines", true, new ConfigDescription("Pause to consider idle destinations, revisit favorite resting places, and alternate ordinary chores in bouts of three. Critical repairs and depleted fuel/ammo take priority.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        IdleVoiceChance = Setting("Maid", "IdleVoiceChance", .55f, "Chance of a native skeleton vocalization at a social/trophy gesture. Dusting and sitting use lower chances; 0 disables idle voices.", 0f, 1f);
+        IdleVoiceCooldown = Setting("Maid", "IdleVoiceCooldown", 12f, "Minimum seconds between animation-linked skeleton noises per maid.", 5f, 120f);
         SittingContinueChance = Setting("Maid", "SittingContinueChance", .6f, "Probability of continuing to sit at each check. 0.6 means 60% stay, 40% get up.", 0f, .95f);
         UseDoors = Config.Bind("Maid", "UseDoors", true, new ConfigDescription("Open permitted player-built doors and gates while travelling, then prioritize closing them. Locked and permanently open doors are excluded.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));

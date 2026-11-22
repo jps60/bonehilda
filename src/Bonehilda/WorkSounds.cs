@@ -10,6 +10,7 @@ internal static class WorkSounds
     private static readonly System.Reflection.MethodInfo CreateEffects = AccessTools.Method(typeof(EffectList), "Create");
     private static EffectList? hammer;
     private static EffectList? supply;
+    private static EffectList? skeleton;
     private static bool HasSound(EffectList effects) => effects.m_effectPrefabs.Any(e => e.m_enabled && e.m_prefab && e.m_prefab.GetComponentsInChildren<AudioSource>(true).Length > 0);
     private static EffectList AudioOnly(EffectList source) => new EffectList
     {
@@ -20,7 +21,22 @@ internal static class WorkSounds
     {
         hammer = AudioOnly(PrefabManager.Instance.GetPrefab("woodwall").GetComponent<Piece>().m_placeEffect);
         supply = AudioOnly(PrefabManager.Instance.GetPrefab("smelter").GetComponent<Smelter>().m_oreAddedEffects);
+        skeleton = AudioOnly(PrefabManager.Instance.GetPrefab("Skeleton").GetComponent<BaseAI>().m_idleSound);
         if (!HasSound(hammer) || !HasSound(supply)) throw new System.InvalidOperationException("Vanilla work sounds could not be resolved.");
+        if (!HasSound(skeleton)) throw new System.InvalidOperationException("Native skeleton voice could not be resolved.");
+    }
+
+    internal static void IdleVoice(Maid maid, float chance = 1f)
+    {
+        if (!maid.View || !maid.View.IsValid() || !maid.View.IsOwner()
+            || Random.value >= Plugin.IdleVoiceChance.Value * chance) return;
+        var data = maid.View.GetZDO();
+        var now = ZNet.instance.GetTime().Ticks;
+        if (now < data.GetLong("BH_nextVoice")) return;
+        data.Set("BH_nextVoice", now + (long)(Plugin.IdleVoiceCooldown.Value * System.TimeSpan.TicksPerSecond));
+        // The native voice prefab has a ZNetView: only the maid's owner creates
+        // it, and Valheim replicates one sound effect to nearby listeners.
+        if (skeleton != null) Play(skeleton, maid.transform.position, maid.transform.rotation);
     }
 
     internal static void Repair(Piece piece)
