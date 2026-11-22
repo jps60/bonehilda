@@ -7,6 +7,7 @@
     <AssemblyName>Bonehilda</AssemblyName>
     <RootNamespace>Bonehilda</RootNamespace>
     <Version>0.4.15</Version>
+    <Authors>Swiftfingers</Authors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>

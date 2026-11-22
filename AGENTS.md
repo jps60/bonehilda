@@ -8,4 +8,6 @@ The user has authorized the following standing workflow for every requested buil
 
 Use `scripts/build.ps1` for the checked build and package. Use `scripts/publish-release.ps1` after committing and pushing. Keep the plugin constant, project version, README, and release version aligned.
 
+Use **Swiftfingers** as the author displayed in mod managers for all future versions. Keep the project Authors metadata, generated package author, and installed profile authorName aligned.
+
 Never stop the user's Valheim or r2modman process. Never start another Valheim instance while one is running. Isolated headless probes must preserve the user's graphics settings and use private saves and plugins.

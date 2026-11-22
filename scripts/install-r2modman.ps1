@@ -40,6 +40,11 @@ $utf8 = New-Object Text.UTF8Encoding($false)
 $newline = if ($yaml.Contains("`r`n")) { "`r`n" } else { "`n" }
 $updatedEntry = [regex]::Replace($entry, '(?ms)^  description:[^\r\n]*(?:\r?\n    [^\r\n]*)*',
     ('  description: ' + ($manifest.description | ConvertTo-Json -Compress)))
+$author = [string]$manifest.author
+if (-not [string]::IsNullOrWhiteSpace($author)) {
+    $updatedEntry = [regex]::Replace($updatedEntry, '(?m)^  authorName:[^\r\n]*',
+        ('  authorName: ' + ($author | ConvertTo-Json -Compress)))
+}
 $updatedEntry = [regex]::Replace($updatedEntry, '(?m)^    major: \d+', "    major: $($version.Major)")
 $updatedEntry = [regex]::Replace($updatedEntry, '(?m)^    minor: \d+', "    minor: $($version.Minor)")
 $updatedEntry = [regex]::Replace($updatedEntry, '(?m)^    patch: \d+', "    patch: $($version.Build)")
@@ -71,6 +76,7 @@ Copy-Item -LiteralPath (Join-Path $packageRoot 'icon.png') -Destination $cache -
 $mmPath = Join-Path $modRoot "mm_v2_manifest.json$suffix"
 if (Test-Path -LiteralPath $mmPath) {
     $mm = Get-Content -LiteralPath $mmPath -Raw | ConvertFrom-Json
+    if (-not [string]::IsNullOrWhiteSpace($author)) { $mm.authorName = $author }
     $mm.description = $manifest.description
     $mm.versionNumber.major = $version.Major
     $mm.versionNumber.minor = $version.Minor

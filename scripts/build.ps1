@@ -29,6 +29,7 @@ try {
     if ($assemblyVersion.ToString(3) -ne $version) { throw 'Assembly and package versions do not match.' }
     $manifest = [ordered]@{
         name = 'Bonehilda'
+        author = [string]$project.Project.PropertyGroup.Authors
         version_number = $version
         website_url = 'https://github.com/jps60/bonehilda'
         description = "Makin' Magic: three coffin tiers summon skeletal maids with 2/4/8 supply slots, animated repairs, machine supply, and free will. Dismiss to rest; open the coffin to recall."
