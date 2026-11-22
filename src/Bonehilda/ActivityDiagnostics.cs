@@ -31,6 +31,9 @@ internal sealed class MaidActivity
     public float interactionReach;
     public bool dustingPose, seated;
     public int stepJumps;
+    public int walkSteps;
+    public bool smoothStepping;
+    public bool groundResting;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour

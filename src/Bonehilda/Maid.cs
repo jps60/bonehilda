@@ -19,6 +19,7 @@ public sealed class Maid : MonoBehaviour
     private static readonly FieldInfo WardList = AccessTools.Field(typeof(PrivateArea), "m_allAreas");
     internal ZNetView View { get; private set; } = null!;
     internal bool HasCargo => cargo != null && cargo.GetAllItems().Count > 0;
+    internal bool Stepping => ledges.Stepping;
     internal bool OffDuty => View && View.IsValid() && (View.GetZDO().GetBool(ReturningKey) || View.GetZDO().GetBool("BH_stowing"));
     internal static bool InCoffinPassage(ZDO data) =>
         data.GetBool("BH_entering") || data.GetBool(ExitingKey) || data.GetBool("BH_stowing");
@@ -33,6 +34,7 @@ public sealed class Maid : MonoBehaviour
     private Job? job;
     private float nextScan;
     private float nextAction;
+    private float standUntil;
     private float jobStarted;
     private float repairChainUntil;
     private float nextHomeCheck;
@@ -73,7 +75,13 @@ public sealed class Maid : MonoBehaviour
     }
     private enum WorkPhase { None, Drawing, Repairing, Recovering, Holstering, Supplying, FinishingSupply }
     private void OnEnable() => Loaded.Add(this);
-    private void OnDisable() { TaskClaims.Release(this); Loaded.Remove(this); }
+    private void OnDisable() { ledges.Reset(); TaskClaims.Release(this); Loaded.Remove(this); }
+
+    private void FixedUpdate()
+    {
+        if (retiring || !View || !View.IsValid() || !View.IsOwner()) { ledges.Reset(); return; }
+        ledges.FixedTick(this, Time.fixedDeltaTime);
+    }
 
     private sealed class Job
     {
@@ -235,6 +243,8 @@ public sealed class Maid : MonoBehaviour
         }
         // Finish a door she opened before resuming work, idle, or dismissal.
         if (doors.Tick(this, ai, Time.deltaTime)) return;
+        if (Stepping) { ai.StopMoving(); return; }
+        if (Time.time < standUntil) { StopNavigation(); ai.StopMoving(); return; }
         if (homeId == ZDOID.None) { SetCoffinPassage(null); CancelJob(); return; }
         var homeObject = ZNetScene.instance.FindInstance(homeId);
         if (!homeObject)
@@ -372,6 +382,7 @@ public sealed class Maid : MonoBehaviour
             TickIdle(home, delta);
             return;
         }
+        if (Time.time < standUntil) { StopNavigation(); ai.StopMoving(); return; }
         SetPace(MovementPolicy.Select(job.Accepted, job.Wear, HasCargo));
         if (job.Supply != null && cargo.GetAllItems().Count == 0)
         {
@@ -804,6 +815,8 @@ public sealed class Maid : MonoBehaviour
         => doorRoutes.TryPath(this, ai, home, from, goal, path);
 
     internal bool CanIdleVisit(Piece piece) => idle.Available(piece);
+    internal void PauseToStand() => standUntil = Mathf.Max(standUntil, Time.time + .8f);
+    internal void StepToward(Vector3 point, float delta) => ledges.Tick(this, ai, point, delta);
 
     internal bool CanIdleApproach(Coffin home, Vector3 point)
     {
@@ -1030,6 +1043,8 @@ public sealed class Maid : MonoBehaviour
             animatorClips = string.Join(", ", animations.GetComponentInChildren<Animator>().GetCurrentAnimatorClipInfo(0).Select(c => c.clip.name)),
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,
             stepJumps = data.GetInt("BH_stepJumps"),
+            walkSteps = data.GetInt("BH_walkSteps"), smoothStepping = Stepping,
+            groundResting = idle.GroundResting,
             homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
             idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
         var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));

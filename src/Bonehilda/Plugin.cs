@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.16";
+    public const string Version = "0.4.17";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -75,7 +75,7 @@ public sealed class Plugin : BaseUnityPlugin
         TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         TrophyDistance = Setting("Maid", "TrophyInteractionDistance", 1.6f, "Standing distance in front of a trophy's visible surface, in meters.", 1f, 2.5f);
-        IdleSitting = Config.Bind("Maid", "IdleSitting", true, new ConfigDescription("Include nearby unoccupied chairs in the idle activity deck. Work and dismissal interrupt sitting.", null,
+        IdleSitting = Config.Bind("Maid", "IdleSitting", true, new ConfigDescription("Use nearby unoccupied chairs, or sit/relax on clear ground when none is suitable, preferring a burning fire. Work and dismissal interrupt sitting.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         SittingCheckInterval = Setting("Maid", "SittingCheckInterval", 10f, "Seconds between rolls to leave an idle chair.", 5f, 120f);
         SittingContinueChance = Setting("Maid", "SittingContinueChance", .6f, "Probability of continuing to sit at each check. 0.6 means 60% stay, 40% get up.", 0f, .95f);

@@ -126,10 +126,12 @@ internal sealed class DoorTransit
         }
         if (stage == "crossing" || stage == "retreating")
         {
+            if (maid.Stepping) { ai.StopMoving(); return true; }
             var target = data.GetVec3(ExitKey, maid.transform.position);
             var offset = target - maid.transform.position; offset.y = 0;
             if (offset.magnitude > .25f)
             {
+                maid.StepToward(target, delta);
                 var clear = ClearWalk(maid.transform.position, target);
                 if (clear) ai.MoveTowards(offset, false); else ai.MoveTo(delta, target, .3f, false);
                 return true;

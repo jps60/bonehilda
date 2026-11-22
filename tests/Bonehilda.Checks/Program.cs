@@ -2,6 +2,20 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("small player-sized threshold is stepped over", StepPolicy.Walk(.25f, 1) && !StepPolicy.Jump(.25f, 1)),
+    ("forty centimeters remains a walking step", StepPolicy.Walk(.4f, 1) && !StepPolicy.Jump(.4f, 1)),
+    ("larger ledge retains the jump animation", !StepPolicy.Walk(.5f, 1) && StepPolicy.Jump(.5f, 1)),
+    ("tall walls do not become step shortcuts", !StepPolicy.Walk(.7f, 1) && !StepPolicy.Jump(.7f, 1)),
+    ("steep support rejects both traversal modes", !StepPolicy.Walk(.25f, .6f) && !StepPolicy.Jump(.5f, .6f)),
+    ("normal floor causes no step lift", !StepPolicy.Walk(.02f, 1)),
+    ("small wooden thresholds use walking recovery", StepPolicy.Walk(.08f, 1)),
+    ("step begins at the current position", StepPolicy.Rise(0) == 0 && StepPolicy.Forward(0) == 0),
+    ("step lifts before crossing the vertical riser", StepPolicy.Rise(.2f) > 0 && StepPolicy.Forward(.2f) == 0),
+    ("foot is fully raised before moving over the riser", StepPolicy.Rise(.35f) == 1 && StepPolicy.Forward(.35f) == 0),
+    ("step continues walking at the landing height", StepPolicy.Rise(.7f) == 1 && StepPolicy.Forward(.7f) > 0),
+    ("step ends exactly at the validated landing", StepPolicy.Rise(1) == 1 && StepPolicy.Forward(1) == 1),
+    ("slow idle gait does not prolong a step excessively", StepPolicy.Duration(1.05f, .5f) <= .65f),
+    ("restrained jump clears a half-meter ledge without a huge leap", Math.Abs(StepPolicy.JumpSpeed(.5f, 10) * StepPolicy.JumpSpeed(.5f, 10) / 20f - .68f) < .001f),
     ("unreachable repair candidates keep the idle pace", MovementPolicy.Select(false, true, false) == MovementPace.Idle),
     ("accepted repairs use urgent travel", MovementPolicy.Select(true, true, false) == MovementPace.Repair),
     ("supply pickup uses player walking pace before carrying", MovementPolicy.Select(true, false, false) == MovementPace.Supply),

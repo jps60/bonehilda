@@ -12,6 +12,7 @@ internal sealed class IdleActivities
     private readonly ChairVisits chair = new ChairVisits();
     private readonly Dictionary<ZDOID, float> blocked = new Dictionary<ZDOID, float>();
     private int active;
+    internal bool GroundResting => active == IdleDeck.Sit && chair.GroundResting;
     private Piece? Target => active == IdleDeck.Dust ? dust.Target : active == IdleDeck.Trophy ? trophy.Target : chair.Target;
     internal string Describe => active == IdleDeck.Dust ? "dust: " + dust.Describe
         : active == IdleDeck.Trophy ? "trophy: " + trophy.Describe : active == IdleDeck.Sit ? "chair: " + chair.Describe : "wandering / cooldown";

@@ -10,14 +10,17 @@ internal sealed class ChairVisits
     private float deadline;
     private float nextRoll;
     private bool sitting;
-    internal bool Performed { get; private set; }
-    internal Piece? Target => target ? target!.GetComponent<Piece>() : null;
-    internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + approach.ToString("F2") + (sitting ? " seated" : " approaching") : "none";
+    private readonly GroundRest ground = new GroundRest();
+    private bool groundActive, chairPerformed;
+    internal bool Performed => groundActive ? ground.Performed : chairPerformed;
+    internal bool GroundResting => groundActive && ground.Resting;
+    internal Piece? Target => target ? target!.GetComponent<Piece>() : groundActive ? ground.Target : null;
+    internal string Describe => groundActive ? ground.Describe : target ? Utils.GetPrefabName(target!.gameObject) + " " + approach.ToString("F2") + (sitting ? " seated" : " approaching") : "none";
 
     internal bool TryBegin(Maid maid, Coffin home, List<Piece> pieces)
     {
         target = null; sitting = false;
-        Performed = false;
+        chairPerformed = groundActive = false;
         var best = float.PositiveInfinity;
         var bestRecent = long.MaxValue;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
@@ -37,11 +40,14 @@ internal sealed class ChairVisits
             bestRecent = recent;
         }
         deadline = Time.time + 20f;
+        if (!target) groundActive = ground.TryBegin(maid, home, pieces);
+        if (groundActive) return true;
         return target;
     }
 
     internal bool Tick(Maid maid, MonsterAI ai, Coffin home, float delta)
     {
+        if (groundActive) return ground.Tick(maid, ai, home, delta);
         var seat = maid.GetComponent<MaidSeating>();
         if (!target || !Eligible(target!.GetComponent<Piece>(), home,
                 MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value))) return false;
@@ -67,7 +73,7 @@ internal sealed class ChairVisits
         ai.StopMoving(); maid.StopNavigation();
         if (!seat.Sit(target)) return false;
         sitting = true;
-        Performed = true;
+        chairPerformed = true;
         nextRoll = Time.time + Plugin.SittingCheckInterval.Value;
         return true;
     }
@@ -75,6 +81,7 @@ internal sealed class ChairVisits
     internal void Cancel(Maid maid)
     {
         maid.GetComponent<MaidSeating>().Stand();
+        ground.Cancel(maid); groundActive = false;
         target = null; sitting = false;
     }
 

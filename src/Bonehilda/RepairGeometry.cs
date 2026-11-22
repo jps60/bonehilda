@@ -71,7 +71,7 @@ internal static class RepairGeometry
     internal static void Body(Maid maid, Vector3 feet, out Vector3 bottom, out Vector3 top, out float radius)
         => Body(maid.GetComponent<CapsuleCollider>(), feet, out bottom, out top, out radius);
 
-    private static void Body(CapsuleCollider capsule, Vector3 feet, out Vector3 bottom, out Vector3 top, out float radius)
+    internal static void Body(CapsuleCollider capsule, Vector3 feet, out Vector3 bottom, out Vector3 top, out float radius)
     {
         var bounds = capsule.bounds;
         radius = Mathf.Max(bounds.extents.x, bounds.extents.z) + .025f;

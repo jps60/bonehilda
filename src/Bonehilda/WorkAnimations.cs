@@ -20,6 +20,7 @@ internal sealed class WorkAnimations : MonoBehaviour
     private const string EmoteKey = "BH_idleEmote", EmoteId = "BH_idleEmoteId", EmoteEnd = "BH_idleEmoteEnd";
     private int seenEmote;
     private Animator animator = null!;
+    private string booleanEmote = "";
     internal bool HammerDrawn
     {
         get
@@ -111,19 +112,32 @@ internal sealed class WorkAnimations : MonoBehaviour
         var revision = data.GetInt(EmoteId);
         if (seenEmote == revision) return;
         seenEmote = revision;
+        if (booleanEmote.Length != 0) animator.SetBool(booleanEmote, false);
+        booleanEmote = "";
         animator.SetTrigger("emote_stop");
         var emote = data.GetString(EmoteKey);
         if (emote.Length == 0 || ZNet.instance.GetTime().Ticks >= data.GetLong(EmoteEnd)) return;
         animator.ResetTrigger("emote_stop");
-        animator.SetTrigger("emote_" + emote);
+        var parameter = animator.parameters.FirstOrDefault(p => p.name == "emote_" + emote);
+        if (parameter != null && parameter.type == AnimatorControllerParameterType.Bool)
+        {
+            booleanEmote = parameter.name;
+            animator.SetBool(booleanEmote, true);
+        }
+        else animator.SetTrigger("emote_" + emote);
     }
 
     internal void Emote(string name, float seconds)
+        => BeginEmote(name, ZNet.instance.GetTime().Ticks + (long)(seconds * TimeSpan.TicksPerSecond));
+
+    internal void RestEmote(string name) => BeginEmote(name, long.MaxValue);
+
+    private void BeginEmote(string name, long until)
     {
         SetHammer(false, false);
         var data = view.GetZDO();
         data.Set(EmoteKey, name);
-        data.Set(EmoteEnd, ZNet.instance.GetTime().Ticks + (long)(seconds * TimeSpan.TicksPerSecond));
+        data.Set(EmoteEnd, until);
         data.Set(EmoteId, data.GetInt(EmoteId) + 1);
     }
 
