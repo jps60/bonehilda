@@ -62,7 +62,7 @@ internal sealed class TrophyVisits
             best = score; target = stand; item = name; standingPoint = point;
             bestRecent = recent;
         }
-        deadline = Time.time + Mathf.Min(30f, Plugin.JobTimeout.Value);
+        deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, standingPoint) : 0f, 30f);
         reacting = false;
         return target;
     }

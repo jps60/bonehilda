@@ -30,6 +30,7 @@ internal sealed class ChairVisits
             if (!Eligible(piece, home, range) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var chair = piece.GetComponent<Chair>();
             if (!chair || chair.m_inShip || !chair.m_attachPoint || !MaidSeating.SupportedPose(chair) || MaidSeating.IsInUse(chair)) continue;
+            if (!MaintenancePolicy.InRadius((chair.m_attachPoint.position - home.transform.position).sqrMagnitude, range)) continue;
             var point = chair.m_attachPoint.position + chair.transform.forward;
             if (!IdleActivities.Floor(point, piece.transform.position.y, out point)) continue;
             if ((point - home.transform.position).sqrMagnitude > Plugin.Radius.Value * Plugin.Radius.Value) continue;
@@ -40,7 +41,7 @@ internal sealed class ChairVisits
             best = distance; target = chair; approach = point;
             bestRecent = recent;
         }
-        deadline = Time.time + 20f;
+        deadline = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(maid.transform.position, approach), 20f);
         if (!target) groundActive = ground.TryBegin(maid, home, pieces);
         if (groundActive) return true;
         return target;

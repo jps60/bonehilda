@@ -26,4 +26,6 @@ internal static class SocialPolicy
     // No pursuit: a social visit is abandoned if its acquaintance wanders away.
     internal static bool InPlace(float movedSquared, float heightDifference) => movedSquared <= 1f && Math.Abs(heightDifference) <= .75f;
     internal static bool CoolingDown(double now, double until) => now < until;
+    internal static bool InRange(float fromMaidSquared, float fromHomeSquared, float socialRadius, float workRadius)
+        => fromMaidSquared <= socialRadius * socialRadius && fromHomeSquared <= workRadius * workRadius;
 }

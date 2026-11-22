@@ -13,7 +13,7 @@ internal sealed class SocialVisits
     private readonly Dictionary<ZDOID, long> cooldowns = new Dictionary<ZDOID, long>();
     private Component? target;
     private SocialKind kind;
-    private Vector3 origin, standingPoint;
+    private Vector3 origin, standingPoint, searchCenter;
     private float deadline;
     private bool reacting;
     private string emote = "";
@@ -25,6 +25,7 @@ internal sealed class SocialVisits
     internal bool TryBegin(Maid maid, Coffin home)
     {
         target = null; Performed = false; reacting = false; settledAt = 0;
+        searchCenter = maid.transform.position;
         if (DangerNear(maid, maid.transform.position)) return false;
         var now = ZNet.instance.GetTime().Ticks;
         foreach (var id in new List<ZDOID>(cooldowns.Keys)) if (cooldowns[id] <= now) cooldowns.Remove(id);
@@ -37,15 +38,15 @@ internal sealed class SocialVisits
         }
         foreach (var odin in OdinWatch.Loaded)
             if (odin) Consider(maid, home, odin, SocialKind.Odin, now, ref best);
-        deadline = Time.time + Mathf.Min(20f, Plugin.JobTimeout.Value);
+        deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, standingPoint) : 0f, 20f);
         return target;
     }
 
     private void Consider(Maid maid, Coffin home, Component candidate, SocialKind category, long now, ref float best)
     {
         var view = candidate.GetComponent<ZNetView>();
-        var range = Mathf.Min(Plugin.SocialRadius.Value, Plugin.Radius.Value);
-        if (!view || !view.IsValid() || (candidate.transform.position - home.transform.position).sqrMagnitude > range * range
+        if (!view || !view.IsValid() || !SocialPolicy.InRange((candidate.transform.position - searchCenter).sqrMagnitude,
+                (candidate.transform.position - home.transform.position).sqrMagnitude, Plugin.SocialRadius.Value, Plugin.Radius.Value)
             || !maid.CanIdleVisit(view) || !TaskClaims.Available(maid, view, work: false)
             || !Maid.Allowed(candidate.transform.position, home.Piece.GetCreator()) || DangerNear(maid, candidate.transform.position)) return;
         var id = view.GetZDO().m_uid;
@@ -62,7 +63,7 @@ internal sealed class SocialVisits
             var point = candidate.transform.position + Quaternion.Euler(0, angle, 0) * toward.normalized * distance;
             if (!IdleActivities.Floor(point, candidate.transform.position.y, out point)
                 || Mathf.Abs(point.y - candidate.transform.position.y) > .75f
-                || (point - home.transform.position).sqrMagnitude > range * range || !Maid.Allowed(point, home.Piece.GetCreator())
+                || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, Plugin.Radius.Value) || !Maid.Allowed(point, home.Piece.GetCreator())
                 || !SpaceFree(maid, point) || !Visible(point + maid.GetComponent<Character>().GetEyePoint() - maid.transform.position, Aim(candidate))) continue;
             var score = (point - maid.transform.position).sqrMagnitude;
             if (score >= best || !maid.CanIdleApproach(home, point)) continue;
@@ -106,9 +107,9 @@ internal sealed class SocialVisits
     {
         var point = target!.transform.position;
         var offset = point - origin;
-        var range = Mathf.Min(Plugin.SocialRadius.Value, Plugin.Radius.Value);
         return SocialPolicy.InPlace(offset.x * offset.x + offset.z * offset.z, offset.y)
-            && (point - home.transform.position).sqrMagnitude <= range * range
+            && SocialPolicy.InRange((point - searchCenter).sqrMagnitude, (point - home.transform.position).sqrMagnitude,
+                Plugin.SocialRadius.Value, Plugin.Radius.Value)
             && Maid.Allowed(point, home.Piece.GetCreator()) && !DangerNear(maid, point) && !DangerNear(maid, maid.transform.position)
             && (kind == SocialKind.Odin || target is Character character && Classify(maid, character) == kind);
     }

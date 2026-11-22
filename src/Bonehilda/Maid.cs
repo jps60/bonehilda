@@ -58,6 +58,7 @@ public sealed class Maid : MonoBehaviour
     private Piece? supplyApproachTarget;
     private bool repairRouteFailed;
     private float idleSpeed;
+    private float wanderUntil;
     private MovementPace pace;
     private readonly IdleActivities idle = new IdleActivities();
     private readonly DoorTransit doors = new DoorTransit();
@@ -441,21 +442,56 @@ public sealed class Maid : MonoBehaviour
             ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
             ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
             if (idle.Tick(this, ai, home, pieces, delta)) return;
-            navigation.Reset(); recoveringRoute = false;
-            // Our AI patch skips BaseAI.UpdateAI, which advances this timer.
-            ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
-            ai.RandomMovement(delta, home.transform.position, false);
-            character.SetRun(false);
-            PrepareDoorPath(ai.m_randomMoveTarget);
-            if (doors.TryBegin(this, ai, ai.m_randomMoveTarget)) ai.StopMoving();
-            else if (!ai.m_reachedRandomMoveTarget) ledges.Tick(this, ai, ai.m_randomMoveTarget, delta);
-            else ledges.Reset();
+            TickWander(home, delta);
         }
         else
         {
             idle.Cancel(this);
             if (Vector3.Distance(transform.position, home.transform.position) > 3f) Navigate(home.ApproachPosition, delta, 1f);
             else { StopNavigation(); ai.StopMoving(); }
+        }
+    }
+
+    private void TickWander(Coffin home, float delta)
+    {
+        if (!ai.m_reachedRandomMoveTarget && (Time.time >= wanderUntil
+            || !MaintenancePolicy.InRadius((ai.m_randomMoveTarget - home.transform.position).sqrMagnitude, ai.m_randomMoveRange)
+            || Vector3.Distance(transform.position, ai.m_randomMoveTarget) <= .5f))
+        {
+            ai.m_reachedRandomMoveTarget = true;
+            StopNavigation();
+        }
+        // Finish a walk before rolling the next destination. Sample the whole
+        // disk rather than the native outer ring, then validate the actual floor.
+        if (ai.m_reachedRandomMoveTarget)
+        {
+            ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
+            if (ai.m_randomMoveUpdateTimer <= 0f) PickWander(home);
+        }
+        if (!ai.m_reachedRandomMoveTarget) Navigate(ai.m_randomMoveTarget, delta, .35f);
+        else { StopNavigation(); ai.StopMoving(); }
+    }
+
+    private void PickWander(Coffin home)
+    {
+        ai.m_randomMoveUpdateTimer = 3f;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var disk = UnityEngine.Random.insideUnitCircle * ai.m_randomMoveRange;
+            var candidate = home.transform.position + new Vector3(disk.x, 0, disk.y);
+            var cap = Mathf.Sqrt(Mathf.Max(0, Plugin.Radius.Value * Plugin.Radius.Value - disk.sqrMagnitude));
+            foreach (var referenceY in new[] { transform.position.y, home.transform.position.y + cap - 1.2f })
+            {
+                if (!IdleActivities.Floor(candidate, referenceY, out var point, Plugin.Radius.Value * 2f + 2f)
+                    || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, ai.m_randomMoveRange)
+                    || !Allowed(point, home.Piece.GetCreator()) || Vector3.Distance(point, transform.position) < 1f
+                    || !CanIdleApproach(home, point)) continue;
+                ai.m_randomMoveTarget = point;
+                ai.m_reachedRandomMoveTarget = false;
+                ai.m_randomMoveUpdateTimer = UnityEngine.Random.Range(Plugin.WanderInterval.Value, Plugin.WanderInterval.Value * 1.5f);
+                wanderUntil = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(transform.position, point), 20f);
+                return;
+            }
         }
     }
 

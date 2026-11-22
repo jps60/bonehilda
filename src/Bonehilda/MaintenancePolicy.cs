@@ -20,7 +20,9 @@ internal static class MaintenancePolicy
     internal static bool CanLoadAmmo(int loaded, int capacity, string currentType, string incomingType) =>
         NeedsInput(loaded, capacity) && (loaded == 0 || currentType == incomingType);
     internal static bool ExcludedConsumer(bool cookingStation, bool obliterator) => cookingStation || obliterator;
-    internal static float WanderRange(float requested, float workRadius) => System.Math.Min(requested, System.Math.Max(0f, workRadius - 2f));
+    internal static float WanderRange(float requested, float workRadius) =>
+        requested <= 0f ? System.Math.Max(0f, workRadius) : System.Math.Min(requested, System.Math.Max(0f, workRadius));
+    internal static float IdleTravelBudget(float distance, float minimum) => System.Math.Max(minimum, System.Math.Min(120f, distance / .6f + 10f));
     internal static bool AcceptedSupply(float before, float after, bool itemIdentity) =>
         itemIdentity ? before == 0 && after != 0 : after > before;
     internal static bool SupplyReady(long now, long lastDelivery, float interval) =>

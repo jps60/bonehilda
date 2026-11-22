@@ -38,7 +38,8 @@ internal sealed class GroundRest
             if (ChooseSpot(maid, home, piece, bounds.center, radius, range, fire: true)) return true;
         }
         if (!maid.CanIdleVisit(home.Piece) || !TaskClaims.Available(maid, home.Piece, work: false)) return false;
-        return ChooseSpot(maid, home, home.Piece, home.transform.position, Mathf.Min(2.5f, range), range, fire: false);
+        var center = home.transform.position + Vector3.ClampMagnitude(maid.transform.position - home.transform.position, range);
+        return ChooseSpot(maid, home, home.Piece, center, Mathf.Min(2.5f, range), range, fire: false);
     }
 
     private bool ChooseSpot(Maid maid, Coffin home, Piece anchor, Vector3 center, float radius, float range, bool fire)
@@ -51,7 +52,7 @@ internal sealed class GroundRest
             var angle = i * Mathf.PI * 2f / 12f;
             var candidate = i == -1 ? anchor.transform.TransformPoint(maid.View.GetZDO().GetVec3("BH_favoriteRestPoint", Vector3.zero))
                 : center + new Vector3(Mathf.Cos(angle), 0, Mathf.Sin(angle)) * radius;
-            if (!IdleActivities.Floor(candidate, anchor.transform.position.y, out candidate)
+            if (!IdleActivities.Floor(candidate, candidate.y, out candidate)
                 || (candidate - home.transform.position).sqrMagnitude > range * range
                 || (fire && Mathf.Abs(candidate.y - anchor.transform.position.y) > 1.5f)
                 || !Maid.Allowed(candidate, home.Piece.GetCreator())) continue;
@@ -64,7 +65,7 @@ internal sealed class GroundRest
             best = distance; point = candidate; look = center; target = anchor;
             if (i == -1) break; // A remembered spot still passes every safety/path check.
         }
-        deadline = Time.time + 20f;
+        deadline = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(maid.transform.position, point), 20f);
         return target;
     }
 
@@ -82,7 +83,8 @@ internal sealed class GroundRest
 
     internal bool Tick(Maid maid, MonsterAI ai, Coffin home, float delta)
     {
-        if (!target || !Maid.Allowed(point, home.Piece.GetCreator())) return false;
+        if (!target || !Maid.Allowed(point, home.Piece.GetCreator()) || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude,
+                MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value))) return false;
         if (resting)
         {
             ai.StopMoving(); maid.StopNavigation();

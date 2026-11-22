@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.18";
+    public const string Version = "0.4.19";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -74,7 +74,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         Wander = Config.Bind("Maid", "IdleWander", true, new ConfigDescription("Free will enabled: wander near the coffin when there are no chores.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        WanderRadius = Setting("Maid", "WanderRadius", 5f, "Idle wandering distance from the coffin, limited by the work radius.", 2f, 50f);
+        WanderRadius = Setting("Maid", "WanderRadius", 0f, "Idle wandering, dusting, and sitting radius from the coffin. 0 follows the full work radius; a positive value sets a smaller idle area, capped by the work radius.", 0f, 100f);
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
         DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, sitting, or social visits); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
         StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
@@ -86,7 +86,7 @@ public sealed class Plugin : BaseUnityPlugin
         SittingCheckInterval = Setting("Maid", "SittingCheckInterval", 10f, "Seconds between rolls to leave an idle chair.", 5f, 120f);
         SocialVisits = Config.Bind("Maid", "SocialVisits", true, new ConfigDescription("Cosmetic greetings to calm friendly skeletons, tames, available maids, and Odin. Work and nearby enemies interrupt visits; other NPC behavior is unchanged.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        SocialRadius = Setting("Maid", "SocialRadius", 10f, "Social visit distance from the coffin, capped by the work radius. Moving acquaintances are not chased.", 2f, 50f);
+        SocialRadius = Setting("Maid", "SocialRadius", 10f, "NPC search radius around the maid's current position. Both NPC and standing spot must remain inside the coffin's work radius. Moving acquaintances are not chased.", 2f, 50f);
         SocialTargetCooldown = Setting("Maid", "SocialTargetCooldown", 90f, "Minimum seconds between greetings to the same acquaintance by this maid.", 15f, 600f);
         NaturalRoutines = Config.Bind("Maid", "NaturalRoutines", true, new ConfigDescription("Pause to consider idle destinations, revisit favorite resting places, and alternate ordinary chores in bouts of three. Critical repairs and depleted fuel/ammo take priority.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));

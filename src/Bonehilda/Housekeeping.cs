@@ -33,14 +33,16 @@ internal sealed class Housekeeping
             var direction = candidatePoint - maid.transform.position; direction.y = 0;
             if (direction.sqrMagnitude < .01f) direction = maid.transform.forward;
             var standing = candidatePoint - direction.normalized * .95f;
-            if (!IdleActivities.Floor(standing, maid.transform.position.y, out standing) || !maid.CanIdleApproach(home, standing)) continue;
+            if (!IdleActivities.Floor(standing, piece.transform.position.y, out standing)
+                || !MaintenancePolicy.InRadius((standing - home.transform.position).sqrMagnitude, ai.m_randomMoveRange)
+                || !Maid.Allowed(standing, home.Piece.GetCreator()) || !maid.CanIdleApproach(home, standing)) continue;
             target = piece;
             localPoint = piece.transform.InverseTransformPoint(candidatePoint);
             distance = d;
             bestRecent = recent;
         }
         if (target == null) previous = null;
-        deadline = Time.time + 16f;
+        deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, target!.transform.position) : 0f, 16f);
         return target;
     }
 
