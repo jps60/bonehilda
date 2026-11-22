@@ -21,6 +21,8 @@ internal sealed class MaidActivity
     public Vector3 eyePosition;
     public float repairReach;
     public int repairRejectedSpace, repairRejectedSight, repairRejectedPath;
+    public bool workAccepted;
+    public string movementPace = "";
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour
@@ -45,7 +47,7 @@ internal sealed class ActivityDiagnostics : MonoBehaviour
         File.WriteAllText(SnapshotPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records, pretty: true));
         if (File.Exists(HistoryPath) && new FileInfo(HistoryPath).Length > 2 * 1024 * 1024) File.WriteAllText(HistoryPath, "");
         File.AppendAllText(HistoryPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records) + Environment.NewLine);
-        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; claim={m.reservation}"))
+        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; pace={m.movementPace}; accepted={m.workAccepted}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; claim={m.reservation}"))
             + "\nSnapshot: " + SnapshotPath;
     }
 }

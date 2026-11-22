@@ -18,11 +18,12 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.14";
+    public const string Version = "0.4.15";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
     internal static float RepairReach = 5f;
+    internal static float PlayerWalkSpeed = 2f;
     internal static ConfigEntry<float> Radius = null!;
     internal static ConfigEntry<float> ScanInterval = null!;
     internal static ConfigEntry<float> WorkInterval = null!;
@@ -111,6 +112,7 @@ public sealed class Plugin : BaseUnityPlugin
             character.m_randomArmor = Array.Empty<GameObject>();
             var player = PrefabManager.Instance.GetPrefab("Player");
             RepairReach = player.GetComponent<Player>().m_maxPlaceDistance;
+            PlayerWalkSpeed = player.GetComponent<Player>().m_walkSpeed;
             WorkAnimations.Configure(prefab, player);
             Visuals.Dress(prefab.transform);
             // Apply after binding the garment so both the body and cloth grow together.

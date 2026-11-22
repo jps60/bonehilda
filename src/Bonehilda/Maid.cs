@@ -34,6 +34,7 @@ public sealed class Maid : MonoBehaviour
     private float nextScan;
     private float nextAction;
     private float jobStarted;
+    private float repairChainUntil;
     private float nextHomeCheck;
     private bool wasOwner;
     private bool retiring;
@@ -46,6 +47,8 @@ public sealed class Maid : MonoBehaviour
     private readonly RepairRetries repairRetries = new RepairRetries();
     private readonly RepairApproach repairApproach = new RepairApproach();
     private bool repairRouteFailed;
+    private float idleSpeed;
+    private MovementPace pace;
     private readonly IdleActivities idle = new IdleActivities();
     private readonly DoorTransit doors = new DoorTransit();
     private WorkPhase phase;
@@ -69,12 +72,14 @@ public sealed class Maid : MonoBehaviour
         internal WearNTear? Wear;
         internal SupplyTarget? Supply;
         internal ZNetView View = null!;
+        internal bool Accepted;
     }
 
     private void Awake()
     {
         View = GetComponent<ZNetView>();
         character = GetComponent<Humanoid>();
+        idleSpeed = character.m_speed;
         ai = GetComponent<MonsterAI>();
         animations = GetComponent<WorkAnimations>();
         cargo = new Inventory("Bonehilda's hands", null!, 1, 1);
@@ -208,6 +213,7 @@ public sealed class Maid : MonoBehaviour
         ClearCombatState();
         EnsureDefaultName();
         LoadCargo();
+        SetPace(OffDuty ? MovementPace.Idle : MovementPolicy.Select(job?.Accepted == true, job?.Wear, HasCargo));
         TaskClaims.Refresh(this);
         var homeId = View.GetZDO().GetZDOID(HomeKey);
         // Validate every maid, including unbound legacy/spawned instances and
@@ -285,7 +291,8 @@ public sealed class Maid : MonoBehaviour
         }
         if (job != null && (repairRouteFailed || !Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value))
         {
-            if (!job.Wear || !ContinueRepairs(home)) CancelJob();
+            var preserveIdle = !job.Accepted;
+            if (!job.Wear || !ContinueRepairs(home)) CancelJob(preserveIdle);
         }
         // Repair cooldown limits swings, not the walk to the next repair.
         // Supply pickups and transfers still finish their interaction pause.
@@ -303,29 +310,41 @@ public sealed class Maid : MonoBehaviour
             job = FindJob(home);
             jobStarted = Time.time;
             ResetRepairRoute();
-            if (job != null) idle.Cancel(this);
+            if (job?.Accepted == true) idle.Cancel(this);
         }
-        if (job == null)
+        if (job != null && job.Wear && !job.Accepted)
         {
-            if (Plugin.Wander.Value)
+            // A damaged piece is only a candidate until there is a usable
+            // sightline and route. Keep idle animations/claims during searches.
+            var ready = WithinRepairReach(job.Piece, RepairPoint(job.Piece));
+            var route = ready ? RepairApproach.Result.Ready : repairApproach.Tick(this, ai, home, job.Piece, out _);
+            if (route == RepairApproach.Result.Ready && TaskClaims.TryClaim(this, job.Piece, "repair", work: true))
             {
-                ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
-                ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
-                if (idle.Tick(this, ai, home, pieces, delta)) return;
+                job.Accepted = true;
+                jobStarted = Time.time;
+                idle.Cancel(this);
                 StopNavigation();
-                // Our AI patch skips BaseAI.UpdateAI, which normally advances the wander timer.
-                ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
-                ai.RandomMovement(delta, home.transform.position, false);
-                if (doors.TryBegin(this, ai, ai.m_randomMoveTarget)) ai.StopMoving();
             }
             else
             {
-                idle.Cancel(this);
-                if (Vector3.Distance(transform.position, home.transform.position) > 3f) Navigate(home.ApproachPosition, delta, 1f);
-                else { StopNavigation(); ai.StopMoving(); }
+                if (route == RepairApproach.Result.Failed) RetryRepairApproach();
+                // Keep the hammer between chained repairs while a brief route
+                // search completes, but stow it before resuming cosmetic idles.
+                if (animations.HammerDrawn)
+                {
+                    if (!repairRouteFailed && Time.time < repairChainUntil) { ai.StopMoving(); return; }
+                    animations.SetHammer(false);
+                }
+                TickIdle(home, delta);
+                return;
             }
+        }
+        if (job == null)
+        {
+            TickIdle(home, delta);
             return;
         }
+        SetPace(MovementPolicy.Select(job.Accepted, job.Wear, HasCargo));
         if (job.Supply != null && cargo.GetAllItems().Count == 0)
         {
             var access = WorkPoint(home.Piece);
@@ -355,6 +374,36 @@ public sealed class Maid : MonoBehaviour
             animations.Interact();
             SetPhase(WorkPhase.Supplying, 0.25f);
         }
+    }
+
+    private void TickIdle(Coffin home, float delta)
+    {
+        SetPace(MovementPace.Idle);
+        if (Plugin.Wander.Value)
+        {
+            ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
+            ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
+            if (idle.Tick(this, ai, home, pieces, delta)) return;
+            StopNavigation();
+            // Our AI patch skips BaseAI.UpdateAI, which advances this timer.
+            ai.m_randomMoveUpdateTimer = Mathf.Max(0f, ai.m_randomMoveUpdateTimer - delta);
+            ai.RandomMovement(delta, home.transform.position, false);
+            character.SetRun(false);
+            if (doors.TryBegin(this, ai, ai.m_randomMoveTarget)) ai.StopMoving();
+        }
+        else
+        {
+            idle.Cancel(this);
+            if (Vector3.Distance(transform.position, home.transform.position) > 3f) Navigate(home.ApproachPosition, delta, 1f);
+            else { StopNavigation(); ai.StopMoving(); }
+        }
+    }
+
+    private void SetPace(MovementPace value)
+    {
+        pace = value;
+        character.m_speed = value == MovementPace.Supply ? Plugin.PlayerWalkSpeed : idleSpeed;
+        character.SetRun(false);
     }
 
     private void ReturnToCoffin(Coffin home, float delta)
@@ -497,15 +546,17 @@ public sealed class Maid : MonoBehaviour
     {
         // Do not immediately revisit the piece just attempted (including rain
         // damage or a rejected repair). Keep the existing retry cooldown.
+        var wasWorking = job?.Accepted == true;
         SkipCurrentJob();
         var next = FindJob(home, repairsOnly: true);
         nextScan = Time.time;
         if (next == null) return false;
         job = next;
         jobStarted = Time.time;
+        if (wasWorking) repairChainUntil = Time.time + 1f;
         ResetRepairRoute();
         phase = WorkPhase.None;
-        StopNavigation();
+        if (wasWorking) StopNavigation();
         return true;
     }
 
@@ -563,11 +614,13 @@ public sealed class Maid : MonoBehaviour
         // Bound the temporary cooldown cache in long-running worlds.
         foreach (var key in skipped.Where(x => x.Value < Time.time).Select(x => x.Key).ToArray()) skipped.Remove(key);
         if (lastSupplied.Count > 1024) lastSupplied.Clear();
-        return best != null && TaskClaims.TryClaim(this, best.Piece, best.Wear ? "repair" : "supply: " + best.Supply!.Kind, work: true) ? best : null;
+        if (best == null || best.Wear) return best;
+        best.Accepted = TaskClaims.TryClaim(this, best.Piece, "supply: " + best.Supply!.Kind, work: true);
+        return best.Accepted ? best : null;
     }
 
     private bool Valid(Job candidate, Coffin home) => candidate.Piece && candidate.View && candidate.View.IsValid()
-        && TaskClaims.Holds(this, candidate.Piece, work: true)
+        && (candidate.Accepted ? TaskClaims.Holds(this, candidate.Piece, work: true) : TaskClaims.Available(this, candidate.Piece, work: true))
         && candidate.Piece.IsPlacedByPlayer()
         && MaintenancePolicy.InRadius((candidate.Piece.transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
         && Allowed(candidate.Piece.transform.position, home.Piece.GetCreator())
@@ -656,7 +709,7 @@ public sealed class Maid : MonoBehaviour
         }
         if (navigation.Advance(dt, feet.x, feet.z, point.x, point.y, point.z, Plugin.StuckTime.Value))
         {
-            if (job != null && job.Wear)
+            if (job?.Accepted == true && job.Wear)
             {
                 RetryRepairApproach();
                 return;
@@ -673,12 +726,13 @@ public sealed class Maid : MonoBehaviour
             }
         }
         if (doorBlocked) { ai.StopMoving(); return; }
+        var run = MovementPolicy.Run(pace, (point - feet).sqrMagnitude, passage || recoveringRoute);
         if (direct)
         {
             var direction = point - feet; direction.y = 0;
-            ai.MoveTowards(direction, false);
+            ai.MoveTowards(direction, run);
         }
-        else ai.MoveTo(dt, point, stoppingDistance, false);
+        else ai.MoveTo(dt, point, stoppingDistance, run);
     }
 
     private void ResetPath()
@@ -805,9 +859,9 @@ public sealed class Maid : MonoBehaviour
         nextAction = Time.time + 0.55f;
     }
 
-    private void CancelJob()
+    private void CancelJob(bool preserveIdle = false)
     {
-        idle.Cancel(this);
+        if (!preserveIdle) idle.Cancel(this);
         // Chained repairs can be walking with the hammer drawn and no active
         // animation phase. Dismissal, invalid targets, and timeouts still stow it.
         if (animations.HammerDrawn) animations.SetHammer(false);
@@ -815,7 +869,7 @@ public sealed class Maid : MonoBehaviour
         SkipCurrentJob();
         job = null;
         ResetRepairRoute();
-        ai.StopMoving();
+        if (!preserveIdle) ai.StopMoving();
     }
 
     private void ResetRepairRoute()
@@ -830,20 +884,25 @@ public sealed class Maid : MonoBehaviour
         if (!repairRetries.TryAgain()) repairRouteFailed = true;
         else jobStarted = Time.time;
         repairApproach.Retry();
-        StopNavigation(); ResetPath(); ai.StopMoving();
+        if (job?.Accepted == true)
+        {
+            TaskClaims.Release(this, job.Piece);
+            job.Accepted = false;
+            StopNavigation(); ResetPath(); ai.StopMoving();
+        }
     }
 
     internal void DoorApproachFailed()
     {
-        if (job != null && job.Wear) repairRouteFailed = true;
-        else if (job != null) jobStarted = Time.time - Plugin.JobTimeout.Value - 1f;
+        if (job?.Accepted == true && job.Wear) repairRouteFailed = true;
+        else if (job?.Accepted == true) jobStarted = Time.time - Plugin.JobTimeout.Value - 1f;
     }
 
     private void SkipCurrentJob()
     {
-        if (job != null && job.Piece) TaskClaims.Release(this, job.Piece);
+        if (job?.Accepted == true && job.Piece) TaskClaims.Release(this, job.Piece);
         if (job != null && job.View && job.View.IsValid())
-            skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(10f, Plugin.ScanInterval.Value * 2f);
+            skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(repairRouteFailed ? 60f : 10f, Plugin.ScanInterval.Value * 2f);
     }
 
     internal MaidActivity ReadActivity()
@@ -852,7 +911,8 @@ public sealed class Maid : MonoBehaviour
         var state = new MaidActivity { id = data.m_uid.ToString(), name = data.GetString("TamedName", "Bonehilda"),
             localOwner = View.IsOwner(), stars = character.GetLevel() - 1, position = transform.position, phase = phase.ToString(),
             alerted = ai.IsAlerted(), hasCargo = HasCargo, cargo = string.Join(", ", cargo.GetAllItems().Select(i => Utils.GetPrefabName(i.m_dropPrefab) + " x" + i.m_stack)),
-            activity = data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle" : job.Wear ? "repair" : "supply",
+            activity = data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle" : job.Wear ? job.Accepted ? "repair" : "idle / checking repair" : "supply",
+            movementPace = pace.ToString(), workAccepted = job?.Accepted == true,
             jobAge = job == null ? 0 : Time.time - jobStarted, pathNodes = ai.m_path.Count, repairRetries = repairRetries.Count, skippedJobs = skipped.Count,
             navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
             door = doors.Describe(this),

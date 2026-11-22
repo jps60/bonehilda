@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Bonehilda/MovementPace.cs" Link="MovementPace.cs" />
     <Compile Include="../../src/Bonehilda/RepairApproachPolicy.cs" Link="RepairApproachPolicy.cs" />
     <Compile Include="../../src/Bonehilda/LinkConfirmation.cs" Link="LinkConfirmation.cs" />
     <Compile Include="../../src/Bonehilda/ActivitySnapshotJson.cs" Link="ActivitySnapshotJson.cs" />

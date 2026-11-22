@@ -2,6 +2,18 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("unreachable repair candidates keep the idle pace", MovementPolicy.Select(false, true, false) == MovementPace.Idle),
+    ("accepted repairs use urgent travel", MovementPolicy.Select(true, true, false) == MovementPace.Repair),
+    ("supply pickup uses player walking pace before carrying", MovementPolicy.Select(true, false, false) == MovementPace.Supply),
+    ("supply delivery uses player walking pace", MovementPolicy.Select(true, false, true) == MovementPace.Supply),
+    ("returning leftover cargo keeps supply pace", MovementPolicy.Select(false, false, true) == MovementPace.Supply),
+    ("completed work restores slow idle pace", MovementPolicy.Select(false, false, false) == MovementPace.Idle),
+    ("repairs run across a clear longer approach", MovementPolicy.Run(MovementPace.Repair, 100, false)),
+    ("repair stance final two meters are walked", !MovementPolicy.Run(MovementPace.Repair, 4, false)),
+    ("repair stance just beyond two meters permits running", MovementPolicy.Run(MovementPace.Repair, 4.01f, false)),
+    ("door or coffin precision overrides repair urgency", !MovementPolicy.Run(MovementPace.Repair, 100, true)),
+    ("supplies never use running paths", !MovementPolicy.Run(MovementPace.Supply, 900, false)),
+    ("idle visits never use running paths", !MovementPolicy.Run(MovementPace.Idle, 900, false)),
     ("empty torch accepts fuel", MaintenancePolicy.NeedsFuel(0, 10, false)),
     ("one full free slot accepts one item", MaintenancePolicy.NeedsFuel(9, 10, false)),
     ("partially burned torch with a free slot accepts fuel", MaintenancePolicy.NeedsFuel(8.75f, 10, false)),
