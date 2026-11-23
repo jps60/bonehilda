@@ -12,6 +12,11 @@ internal static class HomeIdentity
 {
     internal const string Key = "BH_homeIdentity";
     private static readonly System.Reflection.FieldInfo Objects = AccessTools.Field(typeof(ZDOMan), "m_objectsByID");
+    internal static bool IsPair(ZDO home, ZDO maid) => CoffinTier.IsCoffin(home.GetPrefab())
+        && maid.GetPrefab() == Plugin.MaidPrefab.GetStableHashCode()
+        && HomeIdentityPolicy.Linked(home.GetZDOID(Coffin.MaidKey) == maid.m_uid && maid.GetZDOID(Maid.HomeKey) == home.m_uid,
+            maid.GetString(Key), home.GetString(Key),
+            (maid.GetVec3("BH_homePosition", new Vector3(float.PositiveInfinity, 0, 0)) - home.GetPosition()).sqrMagnitude);
     internal static string Ensure(ZDO coffin)
     {
         var token = coffin.GetString(Key);

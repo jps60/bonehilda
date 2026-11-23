@@ -10,6 +10,9 @@ namespace Bonehilda;
 [Serializable]
 internal sealed class MaidActivity
 {
+    public string waitingReason = "";
+    public int scanPieces, scanDeferred, scanReserved, scanRestricted, scanMissingStation, scanNoSupply;
+    public float scanMilliseconds, scanAgeSeconds;
     public string id = "", name = "", activity = "", phase = "", target = "", targetId = "", cargo = "", idle = "", door = "", station = "", reservation = "";
     public int stars, pathNodes, repairRetries, skippedJobs;
     public bool localOwner, alerted, hasCargo, hasStation, inReach, targetNeedsItem, recovering, homeLoaded, chestInUse;
@@ -71,7 +74,7 @@ internal sealed class ActivityDiagnostics : MonoBehaviour
         File.WriteAllText(SnapshotPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records, pretty: true));
         if (File.Exists(HistoryPath) && new FileInfo(HistoryPath).Length > 2 * 1024 * 1024) File.WriteAllText(HistoryPath, "");
         File.AppendAllText(HistoryPath, ActivitySnapshotJson.Encode(Plugin.Version, utc, records) + Environment.NewLine);
-        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; pace={m.movementPace}; accepted={m.workAccepted}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; doorPlan={m.doorPlan}; blocked={m.doorBlockedReason}; opened/closed={m.doorsOpened}/{m.doorsClosed}; claim={m.reservation}"))
+        return string.Join("\n", maids.Select(m => $"{m.name} [{m.id}] {m.activity}/{m.phase}; owner={m.localOwner}; pace={m.movementPace}; accepted={m.workAccepted}; target={m.target} [{m.targetId}]; distance={m.targetDistance:F1}; reach={m.inReach}; station={m.hasStation}; retries={m.repairRetries}; cargo={m.cargo}; idle={m.idle}; door={m.door}; doorPlan={m.doorPlan}; blocked={m.doorBlockedReason}; opened/closed={m.doorsOpened}/{m.doorsClosed}; claim={m.reservation}; wait={m.waitingReason}; scan={m.scanPieces} pieces/{m.scanMilliseconds:F2}ms (age {m.scanAgeSeconds:F1}s); rejected(deferred/reserved/ward/station/stock)={m.scanDeferred}/{m.scanReserved}/{m.scanRestricted}/{m.scanMissingStation}/{m.scanNoSupply}"))
             + "\nSnapshot: " + SnapshotPath;
     }
 }

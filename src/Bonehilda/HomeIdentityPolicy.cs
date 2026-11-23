@@ -8,4 +8,6 @@ internal static class HomeIdentityPolicy
         => homeToken.Length > 0 && maidToken == homeToken
             || maidToken.Length == 0 && HomeMatches("", homeToken, savedDistanceSquared);
     internal static bool Unique(int count) => count == 1;
+    internal static bool Linked(bool reciprocal, string maidToken, string homeToken, float savedDistanceSquared)
+        => reciprocal && HomeMatches(maidToken, homeToken, savedDistanceSquared);
 }

@@ -46,6 +46,10 @@ public sealed class Maid : MonoBehaviour
     private float nextHomeCheck;
     private bool wasOwner;
     private bool retiring;
+    private string waitingReason = "";
+    private int scanPieces, scanDeferred, scanReserved, scanRestricted, scanMissingStation, scanNoSupply;
+    private float scanMilliseconds;
+    private float scanAt = -1f;
     private readonly NavigationProgress navigation = new NavigationProgress();
     private readonly LedgeAssist ledges = new LedgeAssist();
     private bool recoveringRoute;
@@ -262,6 +266,7 @@ public sealed class Maid : MonoBehaviour
             idle.Cancel(this);
             wasOwner = true;
         }
+        waitingReason = "";
         ClearCombatState();
         EnsureDefaultName();
         LoadCargo();
@@ -280,10 +285,11 @@ public sealed class Maid : MonoBehaviour
         if (doors.Tick(this, ai, Time.deltaTime)) return;
         if (Stepping) { ai.StopMoving(); return; }
         if (Time.time < standUntil) { StopNavigation(); ai.StopMoving(); return; }
-        if (homeId == ZDOID.None) { SetCoffinPassage(null); CancelJob(); return; }
+        if (homeId == ZDOID.None) { waitingReason = "waiting for server home-link recovery"; SetCoffinPassage(null); CancelJob(); return; }
         var homeObject = ZNetScene.instance.FindInstance(homeId);
         if (!homeObject)
         {
+            waitingReason = "home is not loaded; waiting for server link validation";
             SetCoffinPassage(null);
             CancelJob();
             return;
@@ -291,8 +297,9 @@ public sealed class Maid : MonoBehaviour
         var home = homeObject.GetComponent<Coffin>();
         if (!home || !home.View.IsValid()) { SetCoffinPassage(null); CancelJob(); return; }
         // A duplicate left by an interrupted spawn can never perform work.
-        if (home.View.GetZDO().GetZDOID(Coffin.MaidKey) != View.GetZDO().m_uid)
+        if (!HomeIdentity.IsPair(home.View.GetZDO(), View.GetZDO()))
         {
+            waitingReason = "home identity or reciprocal link mismatch; awaiting server recovery";
             SetCoffinPassage(null);
             CancelJob();
             return;
@@ -765,11 +772,11 @@ public sealed class Maid : MonoBehaviour
     private void DeliverSupply(Coffin home, Job delivery)
     {
         // Inventory and native owner handler run synchronously on one peer, with capacity rechecked.
-        if (home.Chest.IsInUse()) return;
+        if (!CanTransfer(home)) return;
         if (!home.View.IsOwner()) home.View.ClaimOwnership();
         if (!home.View.IsOwner()) return;
         if (!delivery.View.IsOwner()) delivery.View.ClaimOwnership();
-        if (!delivery.View.IsOwner() || !Valid(delivery, home)) return;
+        if (!delivery.View.IsOwner() || !CanTransfer(home) || !Valid(delivery, home)) return;
         var item = cargo.GetAllItems().FirstOrDefault();
         if (item == null || !delivery.Supply!.Matches(item)) return;
         if (!delivery.Supply.Deliver(item)) { delivery.FailedSupply = true; return; }
@@ -822,6 +829,11 @@ public sealed class Maid : MonoBehaviour
 
     private Job? FindJob(Coffin home, bool suppliesOnly = false, bool criticalOnly = false)
     {
+        var scanStart = System.Diagnostics.Stopwatch.GetTimestamp();
+        scanAt = Time.time;
+        scanPieces = scanDeferred = scanReserved = scanRestricted = scanMissingStation = scanNoSupply = 0;
+        var stock = new HashSet<string>((HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems()
+            .Where(item => item.m_dropPrefab).Select(item => Utils.GetPrefabName(item.m_dropPrefab)), StringComparer.Ordinal);
         var allowRepairs = !suppliesOnly && RoutinePolicy.RepairSearchAllowed(Time.time, repairSearchAfter);
         pieces.Clear();
         Piece.GetAllPiecesInRadius(home.transform.position, Plugin.Radius.Value, pieces);
@@ -831,31 +843,37 @@ public sealed class Maid : MonoBehaviour
         var bestRecent = long.MaxValue;
         foreach (var piece in pieces)
         {
-            if (!piece || !piece.IsPlacedByPlayer() || !Allowed(piece.transform.position, home.Piece.GetCreator())) continue;
+            if (!piece || !piece.IsPlacedByPlayer()) continue;
+            scanPieces++;
+            if (!Allowed(piece.transform.position, home.Piece.GetCreator())) { scanRestricted++; continue; }
             var view = piece.GetComponent<ZNetView>();
             if (!view || !view.IsValid()) continue;
-            if (skipped.TryGetValue(view.GetZDO().m_uid, out var until) && Time.time < until) continue;
-            if (!TaskClaims.Available(this, piece, work: true)) continue;
+            if (skipped.TryGetValue(view.GetZDO().m_uid, out var until) && Time.time < until) { scanDeferred++; continue; }
+            if (!TaskClaims.Available(this, piece, work: true)) { scanReserved++; continue; }
             var wear = piece.GetComponent<WearNTear>();
-            if (criticalOnly && (!wear || !MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage())
-                || wear.GetHealthPercentage() > .25f || !HasRepairStation(piece))) continue;
+            var damaged = wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage());
+            var hasStation = !damaged || !allowRepairs || !Plugin.Repair.Value || HasRepairStation(piece);
+            if (!hasStation) scanMissingStation++;
+            if (criticalOnly && (!damaged || wear!.GetHealthPercentage() > .25f || !hasStation)) continue;
             var candidate = new Job { Piece = piece, View = view };
-            var options = SupplyTarget.ForPiece(piece).ToArray();
+            var options = criticalOnly ? Array.Empty<SupplyTarget>() : SupplyTarget.ForPiece(piece).ToArray();
             foreach (var option in options)
                 if (!option.NeedsItem) fuelRuns.Remove(view.GetZDO().m_uid + ":" + option.Kind);
             candidate.Supply = options
                 .Where(option => !criticalOnly && Enabled(option) && option.NeedsItem
                     && (!option.Fuel || HasCargo || option.LowFuel || fuelRuns.Contains(view.GetZDO().m_uid + ":" + option.Kind))
-                    && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
+                    && stock.Contains(Utils.GetPrefabName(option.Resource.gameObject)))
                 .OrderByDescending(option => option.Depleted).ThenByDescending(option => option.Fuel)
                 .ThenBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
+            if (!criticalOnly && candidate.Supply == null && options.Any(option => Enabled(option) && option.NeedsItem
+                && !stock.Contains(Utils.GetPrefabName(option.Resource.gameObject)))) scanNoSupply++;
             var criticalRepair = (Plugin.NaturalRoutines.Value || criticalOnly) && allowRepairs && (criticalOnly || !HasCargo) && Plugin.Repair.Value
-                && wear && wear.GetHealthPercentage() <= .25f && HasRepairStation(piece);
+                && damaged && wear!.GetHealthPercentage() <= .25f && hasStation;
             if (criticalRepair) { candidate.Supply = null; candidate.Wear = wear; }
             else if (candidate.Supply == null)
             {
-                if (allowRepairs && Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage()) && HasRepairStation(piece)) candidate.Wear = wear;
+                if (allowRepairs && Plugin.Repair.Value && damaged && hasStation) candidate.Wear = wear;
                 else continue;
             }
             var distance = (piece.transform.position - transform.position).sqrMagnitude;
@@ -869,6 +887,7 @@ public sealed class Maid : MonoBehaviour
         // Bound the temporary cooldown cache in long-running worlds.
         foreach (var key in skipped.Where(x => x.Value < Time.time).Select(x => x.Key).ToArray()) skipped.Remove(key);
         if (lastSupplied.Count > 1024) lastSupplied.Clear();
+        scanMilliseconds = (float)((System.Diagnostics.Stopwatch.GetTimestamp() - scanStart) * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
         return best;
     }
 
@@ -1165,10 +1184,11 @@ public sealed class Maid : MonoBehaviour
 
     private void PickUpSupply(Coffin home, SupplyTarget supply)
     {
-        if (home.Chest.IsInUse()) return;
+        if (!CanTransfer(home) || HasCargo) return;
         if (!home.View.IsOwner()) home.View.ClaimOwnership();
         if (!home.View.IsOwner()) return;
         RefreshChest.Invoke(home.Chest, null);
+        if (!CanTransfer(home) || !home.View.IsOwner() || !supply.NeedsItem) return;
         var inventory = home.Chest.GetInventory();
         var item = inventory.GetAllItems().FirstOrDefault(supply.Matches);
         if (item == null) { CancelJob(); return; }
@@ -1186,10 +1206,11 @@ public sealed class Maid : MonoBehaviour
 
     private void ReturnCargo(Coffin home)
     {
-        if (home.Chest.IsInUse()) return;
+        if (!CanTransfer(home)) return;
         if (!home.View.IsOwner()) home.View.ClaimOwnership();
         if (!home.View.IsOwner()) return;
         RefreshChest.Invoke(home.Chest, null);
+        if (!CanTransfer(home) || !home.View.IsOwner()) return;
         var item = cargo.GetAllItems().FirstOrDefault();
         if (item == null) return;
         if (!home.Chest.GetInventory().CanAddItem(item)) { DropCargo(); return; }
@@ -1200,6 +1221,10 @@ public sealed class Maid : MonoBehaviour
         animations.Interact();
         nextAction = Time.time + 0.55f;
     }
+
+    private bool CanTransfer(Coffin home) => View && View.IsValid() && View.IsOwner() && !character.IsDead()
+        && home && home.View && home.View.IsValid() && !home.Chest.IsInUse()
+        && HomeIdentity.IsPair(home.View.GetZDO(), View.GetZDO());
 
     private void CancelJob(bool preserveIdle = false, bool preserveAudience = false, bool defer = true)
     {
@@ -1263,6 +1288,10 @@ public sealed class Maid : MonoBehaviour
     {
         var data = View.GetZDO();
         var state = new MaidActivity { id = data.m_uid.ToString(), name = data.GetString("TamedName", "Bonehilda"),
+            waitingReason = View.IsOwner() ? waitingReason : "remote owner; local queue and scan counters are not authoritative",
+            scanAgeSeconds = scanAt < 0 ? -1 : Time.time - scanAt,
+            scanPieces = scanPieces, scanDeferred = scanDeferred, scanReserved = scanReserved,
+            scanRestricted = scanRestricted, scanMissingStation = scanMissingStation, scanNoSupply = scanNoSupply, scanMilliseconds = scanMilliseconds,
             localOwner = View.IsOwner(), stars = character.GetLevel() - 1, position = transform.position, phase = phase.ToString(),
             alerted = ai.IsAlerted(), hasCargo = HasCargo, cargo = string.Join(", ", cargo.GetAllItems().Select(i => Utils.GetPrefabName(i.m_dropPrefab) + " x" + i.m_stack)),
             activity = audienceActive ? "Odin audience" : data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle"
@@ -1304,6 +1333,10 @@ public sealed class Maid : MonoBehaviour
         var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
         state.homeLoaded = home;
         state.chestInUse = home && home!.Chest.IsInUse();
+        if (View.IsOwner() && state.waitingReason.Length == 0)
+            state.waitingReason = state.chestInUse ? "player using coffin; transfers paused" : job != null && !job.Accepted
+                ? "checking target sightline, route, and reservation" : Time.time < nextAction ? "action/animation cooldown"
+                : job == null && HasCargo ? "finding a consumer or returning carried supplies" : job == null ? "no selected work; see latest scan counters" : "";
         if (home && View.IsOwner()) state.coffinStock = string.Join(", ", home!.Chest.GetInventory().GetAllItems()
             .Select(item => (item.m_dropPrefab ? Utils.GetPrefabName(item.m_dropPrefab) : item.m_shared.m_name) + " x" + item.m_stack));
         if (job != null && job.Piece)
@@ -1353,14 +1386,15 @@ public sealed class Maid : MonoBehaviour
         SaveCargo();
     }
 
-    internal void Retire()
+    internal bool Retire()
     {
-        if (retiring || !View.IsValid()) return;
+        if (retiring || !View.IsValid()) return false;
         if (!View.IsOwner()) View.ClaimOwnership();
-        if (!View.IsOwner()) return;
+        if (!View.IsOwner()) return false;
         retiring = true;
         PrepareDeparture();
         ZNetScene.instance.Destroy(gameObject);
+        return true;
     }
 
     internal void PrepareDeparture()

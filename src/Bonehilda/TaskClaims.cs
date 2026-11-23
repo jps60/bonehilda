@@ -13,6 +13,7 @@ internal static class TaskClaims
     private const string LastTargetKey = "BH_lastTaskTarget", LastStartKey = "BH_lastTaskStart";
     private const long Lease = 15L * TimeSpan.TicksPerSecond;
     private static readonly Dictionary<ZDOID, long> recent = new Dictionary<ZDOID, long>();
+    private static int observedFrame = -1;
     private static long Now => ZNet.instance.GetTime().Ticks;
 
     private static TaskClaim Read(Maid maid)
@@ -58,6 +59,10 @@ internal static class TaskClaims
 
     internal static void ObserveRecent()
     {
+        // Claims made this frame already call Remember directly. Read peer
+        // history only once per frame, regardless of how many maids scan.
+        if (observedFrame == Time.frameCount) return;
+        observedFrame = Time.frameCount;
         foreach (var maid in Maid.Loaded)
             if (maid && maid.View && maid.View.IsValid())
             {

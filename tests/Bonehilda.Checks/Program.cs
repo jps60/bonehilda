@@ -227,11 +227,35 @@ checks = checks.Concat(IdleChecks()).ToArray();
 checks = checks.Concat(ReservationChecks()).ToArray();
 checks = checks.Concat(SnapshotChecks()).ToArray();
 checks = checks.Concat(LinkChecks()).ToArray();
+checks = checks.Concat(PersistenceSafetyChecks()).ToArray();
 checks = checks.Concat(ApproachChecks()).ToArray();
 checks = checks.Concat(SupplyFailureChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> PersistenceSafetyChecks()
+{
+    yield return ("reused reciprocal runtime IDs never override a foreign saved identity", !HomeIdentityPolicy.Linked(true, "saved-home-a", "saved-home-b", 0));
+    yield return ("matching identity alone cannot authorize a duplicate maid", !HomeIdentityPolicy.Linked(false, "home", "home", 0));
+    yield return ("identified home links survive moving the coffin", HomeIdentityPolicy.Linked(true, "home", "home", 10000));
+    yield return ("missing home identity never adopts an identified maid by proximity", !HomeIdentityPolicy.Linked(true, "home", "", 0));
+    yield return ("tokenless legacy recovery still requires reciprocal runtime links", !HomeIdentityPolicy.Linked(false, "", "", 0));
+    yield return ("legacy saved-position tolerance includes its boundary", HomeIdentityPolicy.Linked(true, "", "", .0625f));
+    yield return ("legacy saved-position tolerance rejects a different neighboring coffin", !HomeIdentityPolicy.Linked(true, "", "", .0626f));
+    foreach (var invalid in new[] { float.NaN, float.NegativeInfinity, float.PositiveInfinity, -1f })
+        yield return ($"invalid legacy saved distance cannot authorize transfers: {invalid}", !HomeIdentityPolicy.Linked(true, "", "home", invalid));
+    yield return ("legacy maids may migrate into a uniquely identified home", HomeIdentityPolicy.Linked(true, "", "home", .01f));
+    long At(int second) => second * TimeSpan.TicksPerSecond;
+    var guard = new LinkConfirmation();
+    guard.Confirm("carrying", "home", 1, false, At(10));
+    yield return ("repeated same-frame link requests cannot retire a loaded carrier", !guard.Confirm("carrying", "home", 1, false, At(10)));
+    yield return ("ownership transfer restarts orphan confirmation for a carrier", !guard.Confirm("carrying", "home", 2, false, At(14)));
+    yield return ("new owner cannot inherit the old owner's confirmation elapsed time", !guard.Confirm("carrying", "home", 2, false, At(18)));
+    yield return ("repairing the carrier's home cancels pending retirement", !guard.Confirm("carrying", "home", 2, true, At(19)));
+    yield return ("another broken link after recovery starts from a fresh observation", !guard.Confirm("carrying", "home", 2, false, At(20)));
+    yield return ("persistent orphan after fresh grace is still cleaned up", guard.Confirm("carrying", "home", 2, false, At(25)));
+}
 
 static IEnumerable<(string Name, bool Passed)> SupplyFailureChecks()
 {

@@ -63,10 +63,12 @@ public sealed class Coffin : MonoBehaviour
             if (id != ZDOID.None && doorAngle == 0f && !Chest.IsInUse())
             {
                 var stored = ZNetScene.instance.FindInstance(id);
-                if (stored && stored.TryGetComponent<Maid>(out var storedMaid))
+                if (stored && stored.TryGetComponent<Maid>(out var storedMaid) && storedMaid.View.IsValid()
+                    && HomeIdentity.IsPair(data, storedMaid.View.GetZDO()))
                 {
-                    data.Set(MaidKey, ZDOID.None);
-                    storedMaid.Retire();
+                    // Ownership can move while a player opens another object.
+                    // Keep the pointer if the maid's owner cannot retire her yet.
+                    if (storedMaid.Retire()) data.Set(MaidKey, ZDOID.None);
                 }
                 else if (Time.time >= nextServerQuery)
                 {
@@ -137,9 +139,9 @@ public sealed class Coffin : MonoBehaviour
 
     internal bool Store(Maid maid)
     {
-        if (Chest.IsInUse() || !maid.View.IsOwner() || maid.HasCargo) return false;
+        if (Chest.IsInUse() || !maid.View.IsOwner() || maid.HasCargo || !View.IsValid()) return false;
         if (!View.IsOwner()) View.ClaimOwnership();
-        if (!View.IsOwner() || View.GetZDO().GetZDOID(MaidKey) != maid.View.GetZDO().m_uid) return false;
+        if (!View.IsOwner() || !HomeIdentity.IsPair(View.GetZDO(), maid.View.GetZDO())) return false;
         var data = View.GetZDO();
         maid.SaveStored(data);
         data.Set(DismissedKey, true);
@@ -183,7 +185,8 @@ public sealed class Coffin : MonoBehaviour
         if (!View.IsValid() || !View.IsOwner()) return;
         var id = View.GetZDO().GetZDOID(MaidKey);
         var go = ZNetScene.instance.FindInstance(id);
-        if (go && go.TryGetComponent<Maid>(out var maid)) maid.Retire();
+        if (go && go.TryGetComponent<Maid>(out var maid) && maid.View.IsValid()
+            && HomeIdentity.IsPair(View.GetZDO(), maid.View.GetZDO())) maid.Retire();
         // An unloaded maid checks the server for her missing coffin when she next loads.
     }
 }
@@ -220,9 +223,7 @@ internal static class Network
         {
             var home = isCoffin ? holder : linked!;
             var worker = isCoffin ? linked! : holder;
-            var token = worker.GetString(HomeIdentity.Key);
-            valid = HomeIdentityPolicy.HomeMatches(token, home.GetString(HomeIdentity.Key),
-                (worker.GetVec3("BH_homePosition", new Vector3(float.PositiveInfinity, 0, 0)) - home.GetPosition()).sqrMagnitude);
+            valid = HomeIdentity.IsPair(home, worker);
         }
         if (!valid && HomeIdentity.Repair(holder))
         {
@@ -250,13 +251,13 @@ internal static class Network
         if (go.TryGetComponent<Coffin>(out var coffin))
         {
             if (linkedObject && linkedObject!.TryGetComponent<Maid>(out var restoredMaid) && restoredMaid.View.IsValid()
-                && restoredMaid.View.GetZDO().GetZDOID(Maid.HomeKey) == holderId) return;
+                && coffin.View.IsValid() && HomeIdentity.IsPair(coffin.View.GetZDO(), restoredMaid.View.GetZDO())) return;
             coffin.ScheduleReplacement(linkedId);
         }
         else if (go.TryGetComponent<Maid>(out var maid) && maid.View.IsOwner() && maid.View.GetZDO().GetZDOID(Maid.HomeKey) == linkedId)
         {
             if (linkedObject && linkedObject!.TryGetComponent<Coffin>(out var restoredHome) && restoredHome.View.IsValid()
-                && restoredHome.View.GetZDO().GetZDOID(Coffin.MaidKey) == holderId) return;
+                && HomeIdentity.IsPair(restoredHome.View.GetZDO(), maid.View.GetZDO())) return;
             Plugin.Instance.LogInfo("Despawning orphan Bonehilda " + holderId + "; home=" + linkedId);
             maid.Retire();
         }

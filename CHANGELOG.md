@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.27
+
+- Validate saved home identity and reciprocal links before a coffin retires a maid, before she works at a loaded home, and before picking up, returning, or delivering supplies. Reused runtime IDs cannot authorize actions at another home.
+- Keep a dismissed maid's coffin link until retirement successfully acquires ownership and issues destruction; failed ownership acquisition can retry without clearing her link prematurely.
+- Add 18 identity/recovery policy checks, including foreign IDs, legacy distance boundaries, invalid saved positions, and ownership changes during orphan confirmation. These are policy checks, not a native inventory/save-file integration test.
+- Extend activity diagnostics with local ownership, home-recovery waits, last-scan age/time, and counters for deferred jobs, reservations, wards, missing station coverage, and missing supplies.
+- Reuse a stock-name lookup during each scan, avoid consumer enumeration for critical-only repair searches, reuse station eligibility within selection, and observe shared recent-task history once per frame. Performance changes have not been benchmarked in a live world.
+- Automatically validate upload handoff versions, author, AI labels, file inventory, checksums, gallery captions, and Nexus BBCode during upload preparation and CI.
+
 ## 0.4.26
 
 - Require an identical Bonehilda patch version on every client and server, preventing mixed saved-data and AI behavior between releases.

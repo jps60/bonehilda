@@ -136,6 +136,7 @@ For the handoff and migration steps see docs/RELEASING.md in the source reposito
         (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() + '  ' + $relative
     })
     Write-UploadText 'checksums.sha256' (($lines -join "`n") + "`n")
+    & (Join-Path $PSScriptRoot 'test-upload.ps1') -Directory $staging
     if ((Get-FileHash -LiteralPath (Join-Path $staging $archiveName) -Algorithm SHA256).Hash -ne $hash) { throw 'Staged upload archive changed.' }
     # Both recursive targets were resolved and verified against dist/upload above.
     if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force }

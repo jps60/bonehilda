@@ -2,7 +2,7 @@
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.26 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.27 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
 ![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/main/assets/icon.png)
 
@@ -48,6 +48,8 @@ Back up worlds before installing or updating. Keep the mod installed while the w
 ## Help and development
 
 Run `bonehilda_status` in the F5 console for a snapshot of loaded maids. Enable `Debugging.ActivityLogging` for local activity files in `BepInEx/config`; include relevant excerpts and `BepInEx/LogOutput.log` in a [bug report](https://github.com/jps60/bonehilda/issues). Review logs before sharing: diagnostics include positions and inventory contents.
+
+Status reports include ownership, home-recovery waits, last work-scan time and age, and counts of pieces deferred by retries, reserved by another maid, restricted by wards, missing crafting station coverage, or lacking supplies. Counters describe the latest scan and may overlap; they do not mean that every piece was otherwise reachable. Remote-owner rows do not represent that owner's live queue.
 
 See the [changelog](https://github.com/jps60/bonehilda/blob/main/CHANGELOG.md), [developer guide](https://github.com/jps60/bonehilda/blob/main/docs/DEVELOPMENT.md), and [publishing guide](https://github.com/jps60/bonehilda/blob/main/docs/RELEASING.md). Build with .NET 8: `./scripts/build.ps1`. It runs policy checks and validates the finished ZIP.
 
