@@ -1,38 +1,141 @@
-name: Build
+name: Build and publish
 permissions:
   contents: read
 on:
   push:
+    branches: [main]
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
   pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to publish or retry (empty means checks only)
+        type: string
+        required: false
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
         with:
           dotnet-version: '8.0.x'
       - name: Build, check, and package
         shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || (startsWith(github.ref, 'refs/tags/') && github.ref_name) || '' }}
         run: ./scripts/build.ps1
-      - name: Build installed-library checker
-        shell: pwsh
-        run: |
-          dotnet restore tools/CompatibilityCheck --locked-mode
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          dotnet build tools/CompatibilityCheck -c Release --no-restore
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Prepare mod-host upload materials
         shell: pwsh
         run: ./scripts/prepare-upload.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Bonehilda
           path: dist/Bonehilda-*.zip
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: Bonehilda-upload-materials
           path: dist/upload/Bonehilda-*/
           if-no-files-found: error
+  current-game:
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Bonehilda
+          path: artifacts
+      - name: Download public current-game and dependency assemblies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y lib32gcc-s1
+          mkdir -p "$RUNNER_TEMP/steamcmd"
+          curl --fail --location --retry 3 https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz -o "$RUNNER_TEMP/steamcmd.tar.gz"
+          tar -xzf "$RUNNER_TEMP/steamcmd.tar.gz" -C "$RUNNER_TEMP/steamcmd"
+          for attempt in 1 2 3; do
+            if "$RUNNER_TEMP/steamcmd/steamcmd.sh" +force_install_dir "$RUNNER_TEMP/valheim" +login anonymous +app_update 896660 validate +quit && test -f "$RUNNER_TEMP/valheim/valheim_server_Data/Managed/assembly_valheim.dll"; then break; fi
+            if [[ "$attempt" == 3 ]]; then exit 1; fi
+            sleep 5
+          done
+          unzip -q artifacts/Bonehilda-*.zip -d "$RUNNER_TEMP/package"
+          bepinex=$(jq -r '.dependencies[] | select(startswith("denikson-BepInExPack_Valheim-")) | ltrimstr("denikson-BepInExPack_Valheim-")' "$RUNNER_TEMP/package/manifest.json")
+          jotunn=$(jq -r '.dependencies[] | select(startswith("ValheimModding-Jotunn-")) | ltrimstr("ValheimModding-Jotunn-")' "$RUNNER_TEMP/package/manifest.json")
+          curl --fail --location --retry 3 "https://thunderstore.io/package/download/denikson/BepInExPack_Valheim/$bepinex/" -o "$RUNNER_TEMP/bepinex.zip"
+          curl --fail --location --retry 3 "https://thunderstore.io/package/download/ValheimModding/Jotunn/$jotunn/" -o "$RUNNER_TEMP/jotunn.zip"
+          unzip -q "$RUNNER_TEMP/bepinex.zip" -d "$RUNNER_TEMP/bepinex"
+          unzip -q "$RUNNER_TEMP/jotunn.zip" -d "$RUNNER_TEMP/jotunn"
+      - name: Check the built plugin against current server libraries
+        shell: pwsh
+        run: |
+          $core = (Get-ChildItem "$env:RUNNER_TEMP/bepinex" -Recurse -Filter BepInEx.dll | Select-Object -First 1).DirectoryName
+          $jotunn = (Get-ChildItem "$env:RUNNER_TEMP/jotunn" -Recurse -Filter Jotunn.dll | Select-Object -First 1).DirectoryName
+          ./scripts/check-current-game.ps1 -PluginPath "$env:RUNNER_TEMP/package/BepInEx/plugins/Bonehilda/Bonehilda.dll" -ManagedDirectory "$env:RUNNER_TEMP/valheim/valheim_server_Data/Managed" -BepInExDirectory $core -JotunnDirectory $jotunn
+  publish:
+    if: github.repository == 'jps60/bonehilda' && ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.release_tag != ''))
+    needs: [build, current-game]
+    runs-on: windows-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: bonehilda-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: Bonehilda
+          path: dist
+      - name: Publish the checked ZIP and verify its public hash
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          $archives = @(Get-ChildItem dist/Bonehilda-*.zip)
+          if ($archives.Count -ne 1) { throw 'Expected exactly one release ZIP.' }
+          Expand-Archive $archives[0].FullName -DestinationPath "$env:RUNNER_TEMP/package"
+          New-Item src/Bonehilda/bin/Release/net462 -ItemType Directory -Force | Out-Null
+          Copy-Item "$env:RUNNER_TEMP/package/BepInEx/plugins/Bonehilda/Bonehilda.dll" src/Bonehilda/bin/Release/net462/
+          ./scripts/publish-release.ps1 -Tag $env:RELEASE_TAG
+      - name: Publish the same ZIP to Thunderstore
+        shell: pwsh
+        env:
+          TCLI_AUTH_TOKEN: ${{ secrets.TCLI_AUTH_TOKEN }}
+          THUNDERSTORE_NAMESPACE: ${{ vars.THUNDERSTORE_NAMESPACE }}
+        run: |
+          if (!$env:TCLI_AUTH_TOKEN -or !$env:THUNDERSTORE_NAMESPACE) {
+            Write-Warning 'Thunderstore publishing is not configured. Set TCLI_AUTH_TOKEN and THUNDERSTORE_NAMESPACE. The verified GitHub ZIP is available.'
+            exit 0
+          }
+          if ($env:THUNDERSTORE_NAMESPACE -cnotmatch '^[A-Za-z0-9_]+$') { throw 'Invalid Thunderstore namespace.' }
+          dotnet tool install --global tcli --version 0.2.4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          [xml]$project = Get-Content src/Bonehilda/Bonehilda.csproj
+          $version = [string]$project.Project.PropertyGroup.Version
+          $config = "$env:RUNNER_TEMP/thunderstore-publish.toml"
+          $identity = "[package]`nnamespace = `"$env:THUNDERSTORE_NAMESPACE`"`nname = `"Bonehilda`"`nversionNumber = `"$version`"`n`n"
+          [IO.File]::WriteAllText($config, $identity + [IO.File]::ReadAllText('thunderstore.toml'))
+          tcli publish --config-path $config --file "dist/Bonehilda-$version.zip"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

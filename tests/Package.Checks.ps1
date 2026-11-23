@@ -14,6 +14,8 @@ $cases = @{
     Description = 'Description must be'
     IconSize = 'Icon must be 256x256'
     Plugin = 'ZIP plugin differs'
+    Artwork = 'README artwork must be pinned'
+    Backslash = 'ZIP paths must use forward slashes'
 }
 try {
     foreach ($case in $cases.Keys) {
@@ -32,6 +34,11 @@ try {
                     $bytes = [Text.Encoding]::UTF8.GetBytes(($manifest | ConvertTo-Json -Depth 8))
                 }
                 if ($name -eq 'icon.png' -and $case -eq 'IconSize') { $bytes[19] = 1 }
+                if ($name -eq 'README.md' -and $case -eq 'Artwork') {
+                    $content = [Text.Encoding]::UTF8.GetString($bytes) -replace '/v\d+\.\d+\.\d+/assets/', '/main/assets/'
+                    $bytes = [Text.Encoding]::UTF8.GetBytes($content)
+                }
+                if ($name.Contains('/') -and $case -eq 'Backslash') { $name = $name.Replace('/', '\') }
                 if ($name -eq 'BepInEx/plugins/Bonehilda/Bonehilda.dll' -and $case -eq 'Plugin') { $bytes[0] = 0 }
                 $destination = $output.CreateEntry($name).Open()
                 try { $destination.Write($bytes, 0, $bytes.Length) } finally { $destination.Dispose() }

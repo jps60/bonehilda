@@ -1,4 +1,4 @@
-param([string]$NotesPath = '')
+param([string]$NotesPath = '', [string]$Tag = '')
 $ErrorActionPreference = 'Stop'
 $env:GIT_TERMINAL_PROMPT = '0'
 $env:GCM_INTERACTIVE = 'Never'
@@ -7,6 +7,7 @@ Set-Location -LiteralPath $projectRoot
 if (git status --porcelain) { throw 'Commit the completed source changes before publishing a release.' }
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'src/Bonehilda/Bonehilda.csproj')
 $Version = [string]$project.Project.PropertyGroup.Version
+& (Join-Path $PSScriptRoot 'test-release-version.ps1') -Tag $Tag
 $archive = Join-Path $projectRoot "dist/Bonehilda-$Version.zip"
 if (-not (Test-Path -LiteralPath $archive)) { throw 'Build archive is missing.' }
 & (Join-Path $PSScriptRoot 'test-package.ps1') -ArchivePath $archive
@@ -17,19 +18,28 @@ $notes = if ($NotesPath) { [IO.File]::ReadAllText([IO.Path]::GetFullPath($NotesP
 }
 $notes += "`r`n`r`nSHA-256: $archiveHash"
 $head = (git rev-parse HEAD).Trim()
-$remote = (git ls-remote origin refs/heads/main)
-if ($LASTEXITCODE -ne 0 -or ($remote -split '\s+')[0] -ne $head) { throw 'Push the release commit to main before publishing.' }
-$credentialResult = "protocol=https`nhost=github.com`n`n" | git -c credential.interactive=never credential fill 2>$null
-if ($LASTEXITCODE -ne 0) { throw 'GitHub authentication is unavailable.' }
+$reference = if ($Tag) { "refs/tags/$Tag" } else { 'refs/heads/main' }
+$remote = (git ls-remote origin $reference "$reference^{}")
+$remoteHeads = @($remote | ForEach-Object { ($_ -split '\s+')[0] })
+if ($LASTEXITCODE -ne 0 -or $remoteHeads -notcontains $head) { throw 'Push the matching release commit/tag before publishing.' }
 $credentialFields = @{}
-foreach ($line in $credentialResult) {
-    if ($line -match '^([^=]+)=(.*)$') { $credentialFields[$matches[1]] = $matches[2] }
+if ($env:GITHUB_ACTIONS -eq 'true' -and $env:GITHUB_TOKEN) {
+    if ($env:GITHUB_REPOSITORY -cne 'jps60/bonehilda') { throw 'Unexpected CI repository.' }
+    $credentialFields.password = $env:GITHUB_TOKEN
+} else {
+    $credentialResult = "protocol=https`nhost=github.com`n`n" | git -c credential.interactive=never credential fill 2>$null
+    if ($LASTEXITCODE -ne 0) { throw 'GitHub authentication is unavailable.' }
+    foreach ($line in $credentialResult) {
+        if ($line -match '^([^=]+)=(.*)$') { $credentialFields[$matches[1]] = $matches[2] }
+    }
 }
 if (-not $credentialFields.password) { throw 'GitHub authentication did not supply a credential.' }
 $headers = @{ Authorization = ('Bearer ' + $credentialFields.password); Accept = 'application/vnd.github+json'; 'User-Agent' = 'Bonehilda-release'; 'X-GitHub-Api-Version' = '2022-11-28' }
 $repoApi = 'https://api.github.com/repos/jps60/bonehilda'
-$account = Invoke-RestMethod -Uri 'https://api.github.com/user' -Headers $headers
-if ($account.login -ne 'jps60') { throw 'Unexpected authenticated GitHub account.' }
+if ($env:GITHUB_ACTIONS -ne 'true') {
+    $account = Invoke-RestMethod -Uri 'https://api.github.com/user' -Headers $headers
+    if ($account.login -ne 'jps60') { throw 'Unexpected authenticated GitHub account.' }
+}
 $tag = 'v' + $Version
 $release = $null
 try { $release = Invoke-RestMethod -Uri ($repoApi + '/releases/tags/' + $tag) -Headers $headers }

@@ -4,7 +4,7 @@ Use **Swiftfingers** as the public author/team name. Thunderstore derives the di
 
 ## Build and deliver
 
-1. Update `Plugin.Version`, the project `Version`, README, changelog, and the versioned validation record in `docs/SERVER.md` together. Add release notes describing actual validation and limitations.
+1. Run `./scripts/bump-version.ps1 -Patch` (or `-Version 0.5.0`). It validates existing metadata before updating the plugin/project, README, developer guide and changelog. The build derives assembly and manifest versions. Fill the new changelog section and record actual validation/limitations; the bump command does not commit, tag, install or publish.
 2. Run `./scripts/build.ps1` with .NET 8. It restores pinned packages, builds, runs policy checks, and validates `dist/Bonehilda-<version>.zip`. `-SkipChecks` is for local development only; do not publish an unchecked build.
 3. Check installed API compatibility when a game installation is available:
 
@@ -61,6 +61,18 @@ For another Valheim host, adapt the prepared text to its current form, preserve 
 4. Upload the unchanged mod ZIP. Add the separate gallery PNGs and captions where the site permits images. Keep private drafts unpublished until a functional file is attached and all required fields are complete; public placeholders are not appropriate.
 5. After the first publication, record the actual listing URLs here. Download each host's public mod ZIP and compare it to `verification.json` before announcing the release. No listing URLs are recorded yet because neither submission has occurred.
 6. Test installation from each host in a fresh profile with its dependencies. To switch an existing r2modman local import to the official package, disable/remove the old imported entry before enabling the downloaded one, keep exactly one enabled Bonehilda DLL, and avoid opening the world during the switch. Preserve the configuration if desired.
+
+## Automated checks and tag releases
+
+Pushes to main and pull requests run the pinned checked build and upload its ZIP. A second Linux job downloads the current public dedicated-server libraries using anonymous SteamCMD (app 896660), downloads the package's declared BepInEx/Jotunn versions, and checks the actual built DLL against those APIs. This catches API drift without changing compile-time references. It does not launch a server or qualify multiplayer gameplay. SteamCMD/network failure blocks publishing instead of silently skipping compatibility checks.
+
+For automatic publishing, commit and push the completed source, then create and push its exact version tag, for example `git tag v0.4.32` followed by `git push origin v0.4.32`. Only matching `vMAJOR.MINOR.PATCH` tags publish. Alternatively dispatch **Build and publish** with an existing `release_tag`; an empty input runs checks only. Tagged source is checked out explicitly. Publishing waits for both build and current-game checks, downloads the checked artifact without rebuilding, calls `scripts/publish-release.ps1`, and verifies the public GitHub ZIP hash before attempting Thunderstore. Do not run a simultaneous manual publisher for the same tag.
+
+Configure repository Actions secret **TCLI_AUTH_TOKEN** with a Thunderstore team service-account token and Actions variable **THUNDERSTORE_NAMESPACE** with the verified team namespace (intended: Swiftfingers). Keep the token out of files and chat. The workflow uses pinned TCLI 0.2.4 and passes the same ZIP to Thunderstore, retaining the AI-generated category. The GitHub token is scoped to the publishing job. Branch/PR builds cannot publish. Forks cannot use the upstream publisher.
+
+Until both Thunderstore settings exist, that step reports a warning and skips; a GitHub release does not imply a Thunderstore listing exists. GitHub release publishing remains functional. If a configured Thunderstore upload fails, the verified GitHub release remains available: fix credentials/settings and **rerun failed jobs**, which reuse the original build artifact. Do not move tags or overwrite published ZIPs. Rebuilding an existing version may produce different bytes; the publisher rejects an existing asset that differs. If an upstream version is already published, make a new release rather than overwriting it. Local/manual releases remain supported by `scripts/publish-release.ps1` after commit/push.
+
+Packaged README artwork uses immutable `v<version>` raw URLs; the repository README continues using main. ZIP entries use forward slashes, omit directory entries, and have fixed timestamps for portable, repeatable packaging of identical inputs. Package tests reject unpinned artwork and Windows-only ZIP paths. No game/dependency assemblies enter the archive. These workflows do not change maid simulation or enable server-run AI.
 
 ## Distribution hygiene
 

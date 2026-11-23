@@ -6,11 +6,13 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 Push-Location $projectRoot
 try {
+    & (Join-Path $PSScriptRoot 'test-release-version.ps1') -Tag $env:RELEASE_TAG
     & $Dotnet restore src/Bonehilda/Bonehilda.csproj --locked-mode
     if ($LASTEXITCODE -ne 0) { throw 'Restore failed.' }
     & $Dotnet build src/Bonehilda/Bonehilda.csproj -c Release --no-restore
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
     if (-not $SkipChecks) {
+        & (Join-Path $projectRoot 'tests/ReleaseTools.Checks.ps1')
         & $Dotnet run --project tests/Bonehilda.Checks/Bonehilda.Checks.csproj -c Release
         if ($LASTEXITCODE -ne 0) { throw 'Maintenance policy checks failed.' }
     }
@@ -24,6 +26,10 @@ try {
     Copy-Item -LiteralPath 'assets/icon-prompt.txt' -Destination (Join-Path $staging 'ARTWORK.txt') -Force
     [xml]$project = Get-Content 'src/Bonehilda/Bonehilda.csproj'
     $version = $project.Project.PropertyGroup.Version
+    $readme = [IO.File]::ReadAllText((Join-Path $projectRoot 'README.md')).Replace(
+        'https://raw.githubusercontent.com/jps60/bonehilda/main/assets/',
+        "https://raw.githubusercontent.com/jps60/bonehilda/v$version/assets/")
+    [IO.File]::WriteAllText((Join-Path $staging 'README.md'), $readme, (New-Object Text.UTF8Encoding($false)))
     $jotunnVersion = [string]($project.Project.ItemGroup.PackageReference | Where-Object Include -eq 'JotunnLib').Version
     $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $pluginDirectory 'Bonehilda.dll')).Version
     if ($assemblyVersion.ToString(3) -ne $version) { throw 'Assembly and package versions do not match.' }
@@ -42,7 +48,21 @@ try {
     $unexpected = @($packageFiles | Where-Object { $_.Name -notin @('Bonehilda.dll', 'README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'manifest.json', 'icon.png', 'ARTWORK.txt') })
     if ($unexpected.Count -gt 0) { throw 'Unexpected files in dist/package. Clear that directory before packaging.' }
     $archive = Join-Path $projectRoot "dist/Bonehilda-$version.zip"
-    Compress-Archive -Path "$staging/*" -DestinationPath $archive -Force
+    # Stable timestamps and portable forward-slash names on Windows and Linux.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    Add-Type -AssemblyName System.IO.Compression
+    $stream = [IO.File]::Open($archive, [IO.FileMode]::Create)
+    $zip = New-Object IO.Compression.ZipArchive($stream, [IO.Compression.ZipArchiveMode]::Create)
+    try {
+        foreach ($file in ($packageFiles | Sort-Object FullName)) {
+            $name = $file.FullName.Substring($staging.Length + 1).Replace('\', '/')
+            $entry = $zip.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal)
+            $entry.LastWriteTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
+            $inputFile = [IO.File]::OpenRead($file.FullName)
+            $outputFile = $entry.Open()
+            try { $inputFile.CopyTo($outputFile) } finally { $outputFile.Dispose(); $inputFile.Dispose() }
+        }
+    } finally { $zip.Dispose(); $stream.Dispose() }
     & (Join-Path $PSScriptRoot 'test-package.ps1') -ArchivePath $archive
     if (-not $SkipChecks) { & (Join-Path $projectRoot 'tests/Package.Checks.ps1') -ArchivePath $archive }
     # Promote only a validated package. Resolve and check both recursive cleanup

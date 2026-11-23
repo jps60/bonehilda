@@ -16,6 +16,7 @@ $zip = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($ArchivePath))
 try {
     $files = @{}
     foreach ($entry in $zip.Entries) {
+        if ($entry.FullName.Contains('\')) { throw 'ZIP paths must use forward slashes.' }
         $name = $entry.FullName.Replace('\', '/')
         if ($name.EndsWith('/')) { continue }
         if ($expected -cnotcontains $name -or $files.ContainsKey($name)) { throw "Unexpected or duplicate ZIP entry: $name" }
@@ -39,6 +40,8 @@ try {
         $content = $strictUtf8.GetString((Read-Bytes $files[$name]))
         if ([string]::IsNullOrWhiteSpace($content)) { throw "Empty package document: $name" }
         if ($name -eq 'README.md' -and -not $content.Contains("Version $version")) { throw 'README version is out of date.' }
+        if ($name -eq 'README.md' -and ($content.Contains('https://raw.githubusercontent.com/jps60/bonehilda/main/assets/') -or
+            -not $content.Contains("https://raw.githubusercontent.com/jps60/bonehilda/v$version/assets/icon.png"))) { throw 'README artwork must be pinned to the release tag.' }
         if ($name -eq 'CHANGELOG.md' -and -not $content.Contains("## $version")) { throw 'Changelog lacks this release.' }
     }
     $icon = Read-Bytes $files['icon.png']
