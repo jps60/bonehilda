@@ -1,10 +1,13 @@
 name: Build
+permissions:
+  contents: read
 on:
   push:
   pull_request:
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -13,7 +16,15 @@ jobs:
       - name: Build, check, and package
         shell: pwsh
         run: ./scripts/build.ps1
+      - name: Build installed-library checker
+        shell: pwsh
+        run: |
+          dotnet restore tools/CompatibilityCheck --locked-mode
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet build tools/CompatibilityCheck -c Release --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: Bonehilda
           path: dist/Bonehilda-*.zip
+          if-no-files-found: error

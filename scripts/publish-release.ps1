@@ -9,6 +9,7 @@ if (git status --porcelain) { throw 'Commit the completed source changes before 
 $Version = [string]$project.Project.PropertyGroup.Version
 $archive = Join-Path $projectRoot "dist/Bonehilda-$Version.zip"
 if (-not (Test-Path -LiteralPath $archive)) { throw 'Build archive is missing.' }
+& (Join-Path $PSScriptRoot 'test-package.ps1') -ArchivePath $archive
 $archiveHash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
 $archiveSize = (Get-Item -LiteralPath $archive).Length
 $notes = if ($NotesPath) { [IO.File]::ReadAllText([IO.Path]::GetFullPath($NotesPath)) } else {

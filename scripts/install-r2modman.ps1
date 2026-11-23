@@ -32,7 +32,7 @@ if ([Reflection.AssemblyName]::GetAssemblyName($sourceDll).Version.ToString(3) -
 $backup = Join-Path ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))) ('.tools/backups/r2-release-' + (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
 New-Item -ItemType Directory -Force $backup | Out-Null
 Copy-Item -LiteralPath $yamlPath, $dlls[0].FullName -Destination $backup
-foreach ($name in @('manifest.json', 'mm_v2_manifest.json', 'README.md', 'LICENSE', 'icon.png', 'ARTWORK.txt')) {
+foreach ($name in @('manifest.json', 'mm_v2_manifest.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'icon.png', 'ARTWORK.txt')) {
     $target = Join-Path $modRoot "$name$suffix"
     if (Test-Path -LiteralPath $target) { Copy-Item -LiteralPath $target -Destination $backup }
 }
@@ -66,7 +66,7 @@ catch {
     Move-Item -LiteralPath $loadedBackup -Destination $dlls[0].FullName
     throw
 }
-foreach ($name in @('manifest.json', 'README.md', 'LICENSE', 'icon.png', 'ARTWORK.txt')) {
+foreach ($name in @('manifest.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'icon.png', 'ARTWORK.txt')) {
     Copy-Item -LiteralPath (Join-Path $packageRoot $name) -Destination (Join-Path $modRoot "$name$suffix") -Force
 }
 $gameRoot = [IO.Directory]::GetParent([IO.Directory]::GetParent($profileRoot).FullName).FullName

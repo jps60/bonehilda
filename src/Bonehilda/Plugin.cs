@@ -13,12 +13,13 @@ using UnityEngine;
 namespace Bonehilda;
 
 [BepInPlugin(Guid, "Bonehilda", Version)]
-[BepInDependency(Jotunn.Main.ModGuid)]
-[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
+[BepInDependency(Jotunn.Main.ModGuid, "2.30.2")]
+// Releases currently increment the patch component even when saved/network data changes.
+[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.25";
+    public const string Version = "0.4.26";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;

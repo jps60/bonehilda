@@ -6,7 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>Bonehilda</AssemblyName>
     <RootNamespace>Bonehilda</RootNamespace>
-    <Version>0.4.25</Version>
+    <Version>0.4.26</Version>
     <Authors>Swiftfingers</Authors>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
