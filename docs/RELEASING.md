@@ -23,6 +23,16 @@ Use **Swiftfingers** as the public author/team name. Thunderstore derives the di
 
 ## Thunderstore upload
 
+Generate the host-specific handoff from the existing checked build:
+
+```powershell
+./scripts/prepare-upload.ps1 -VerifyPublicDownload
+```
+
+This writes `dist/upload/Bonehilda-<version>/` containing the unchanged release ZIP, Thunderstore metadata, Nexus descriptions in BBCode and plain text, copyable field values, an ordered gallery with captions, and SHA-256 checksums. Public verification downloads the GitHub asset without authentication and compares it with the local ZIP. Without `-VerifyPublicDownload`, preparation works offline and reports that the public download was not checked. CI prepares the same materials as a separate artifact.
+
+**Upload only `Bonehilda-<version>.zip` as the mod file on each host.** The surrounding directory is a submission handoff, not a second game-mod package. Gallery captures are separate image uploads. Their original source files remain in `assets/models`; they were copied without altering the images. The captures were made during development and do not certify this release's multiplayer testing.
+
 Upload the **same validated ZIP** to the **Valheim** community as `Swiftfingers-Bonehilda`. It contains the exact-case root `manifest.json`, `README.md`, `icon.png` (256×256), changelog, license, credits, artwork prompt, and `BepInEx/plugins/Bonehilda/Bonehilda.dll`. Dependencies are declared, not redistributed. The build rejects extra DLLs or unlisted paths. [Package requirements](https://wiki.thunderstore.io/mods/creating-a-package) and [BepInEx folder routing](https://wiki.thunderstore.io/mods/packaging-your-mods).
 
 Use the README as the full listing and the generated manifest's description as the short description. Select applicable content/build-piece/NPC categories from those currently offered by the community. Retain the experimental multiplayer wording until the server matrix is completed. Set the GitHub repository as the website and issue tracker. Upload existing project gameplay screenshots to illustrate the actual mod; distinguish the generated icon from in-game appearance.
@@ -31,7 +41,24 @@ The account/team and first upload still need to be completed on Thunderstore. No
 
 ## Other hosts
 
-For Nexus Mods or another Valheim host, use the same release archive and README description, list BepInEx and Jötunn as required dependencies, select the MIT license, credit Swiftfingers, and include the compatibility limitations. Review that host's current fields and artwork rules at submission time. No claim is made that a listing or account already exists.
+For Nexus Mods, use the same release archive and the generated `nexus/summary.txt`, `nexus/description.bbcode` (BBCode/source editor) or `nexus/description.txt` (plain-text alternative), `nexus/file-description.txt`, and `nexus/fields.json`. The description includes dependencies, recipes, installation, configuration, removal, support links, and experimental multiplayer status. Use **Swiftfingers** in the Author field and choose the intended upload account; no account has been authenticated by preparation.
+
+List BepInExPack_Valheim as an external requirement and Jötunn as a requirement using its [Nexus page](https://www.nexusmods.com/valheim/mods/1138). Require Jötunn 2.30.2 or newer; if that mirror offers an older file, direct users to the upstream Thunderstore package. Manual extraction and r2modman import are documented; Vortex deployment has not been validated. Choose the closest currently available gameplay/NPC/building category rather than treating suggested labels as verified category IDs.
+
+The code and listing text contain substantial OpenAI Codex output, and the illustrative icon was generated with imagegen. Apply Nexus's **AI-Generated Content** and **AI Media** classifications and retain the prepared disclosure. Do not classify this as limited AI assistance only. Nexus's [AI policy](https://help.nexusmods.com/article/180-ai-policy-changes-2026) and [submission guidelines](https://help.nexusmods.com/article/28-file-submission-guidelines) were reviewed on 2026-11-22; recheck them at submission time.
+
+Keep reuse/fork permissions consistent with the existing MIT license and the third-party rights notice. AI-training and other new account-specific permission preferences are deliberately not selected by preparation; review them in the Nexus form before submission. No license change is implied by these draft form suggestions. Donation settings, ownership declarations, and any terms acceptance remain account actions, not values a packaging script should submit automatically.
+
+For another Valheim host, adapt the prepared text to its current form, preserve the dependency and compatibility statements, and credit Swiftfingers. No claim is made that a listing or account already exists.
+
+## First-upload sequence
+
+1. Review `dist/upload/Bonehilda-<version>/README.txt` and `verification.json`. A package can be ready for a testing release while dedicated-server qualification remains outstanding; do not label that support as tested.
+2. Choose or create the **Swiftfingers** Thunderstore team and confirm it is the intended permanent namespace. On Nexus, confirm the intended uploader and Author field. Preparation does not check availability or create either account.
+3. Review the final descriptions, requirements, AI disclosures, current category choices, license/permission fields, gallery captions, and archive version on each form.
+4. Upload the unchanged mod ZIP. Add the separate gallery PNGs and captions where the site permits images. Keep private drafts unpublished until a functional file is attached and all required fields are complete; public placeholders are not appropriate.
+5. After the first publication, record the actual listing URLs here. Download each host's public mod ZIP and compare it to `verification.json` before announcing the release. No listing URLs are recorded yet because neither submission has occurred.
+6. Test installation from each host in a fresh profile with its dependencies. To switch an existing r2modman local import to the official package, disable/remove the old imported entry before enabling the downloaded one, keep exactly one enabled Bonehilda DLL, and avoid opening the world during the switch. Preserve the configuration if desired.
 
 ## Distribution hygiene
 

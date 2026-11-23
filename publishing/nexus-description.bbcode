@@ -1,0 +1,72 @@
+[size=5][b]Bonehilda[/b][/size]
+[i]A little Makin' Magic for your mead hall.[/i]
+
+Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
+
+[b]Version {{VERSION}} | Author: Swiftfingers | Requires BepInEx and Jotunn[/b]
+
+[size=4][b]A helping hand around the homestead[/b][/size]
+[list]
+[*]Repairs damaged player-built structures with a visible hammer, using player repair reach and the appropriate crafting station's coverage.
+[*]Carries matching materials from her own coffin to fires, torches, braziers, smelters, kilns, windmills, spinning wheels, refineries, fermenters, shield generators, and ballistae. Cooking stations and obliterators are excluded.
+[*]Starts refueling below 25% capacity or an estimated two minutes of burn time, then keeps fetching supplies until full. Each trip carries one item; the configurable delivery interval defaults to one second.
+[*]Coordinates chores with other maids. She can open permitted doors when enemies are absent and prioritizes closing doors she opens.
+[*]When work allows, wanders, dusts, sits, reacts to trophies, and greets friendly creatures. She prefers sheltered resting places and pays her respects to Odin.
+[*]Drops carried supplies on death. Her coffin summons a replacement after a configurable delay.
+[/list]
+
+[size=4][b]Three coffins, three familiar faces[/b][/size]
+Build with the hammer under Furniture; some build-menu mods move storage pieces into Storage. A workbench is required. Leave a clear, level approach in front of the door.
+
+[b]0 stars: red dress, 2 supply slots[/b]
+20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, and 1 Simple Undyed Dress.
+
+[b]1 star: black dress, 4 supply slots[/b]
+25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, and 1 Plain Brown Dress.
+
+[b]2 stars: blush floral dress, 8 supply slots[/b]
+30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, and 1 Blue Dress with Beads.
+
+Each recipe uses a dress sold by Hildir. All tiers perform the same chores; their star level, appearance, and storage differ.
+
+[size=4][b]Putting her to work[/b][/size]
+Leave matching materials in her coffin. Her default work area is 30 meters from the coffin, and she uses only her own coffin's inventory. Repairs are free, like the player's hammer, and require appropriate crafting station coverage.
+
+[b][E] Dismiss[/b] sends her off duty. [b][E] Recall[/b] cancels her return while she is walking home. Open her coffin to recall a resting maid. Shift-use renames her. Dismissal preserves health and returns carried supplies, or drops them if storage is full.
+
+[size=4][b]Installation[/b][/size]
+[list=1]
+[*]Install [url=https://thunderstore.io/c/valheim/p/denikson/BepInExPack_Valheim/]BepInExPack_Valheim 5.4.2360[/url] and [url=https://thunderstore.io/c/valheim/p/ValheimModding/Jotunn/]Jotunn 2.30.2 or newer[/url]. If a mirror offers an older Jotunn file, use the linked upstream package.
+[*]Download Bonehilda-{{VERSION}}.zip. For manual installation, extract its BepInEx folder into the Valheim directory. The plugin belongs at BepInEx/plugins/Bonehilda/Bonehilda.dll. Dependencies are installed separately.
+[*]For r2modman, use Settings > Import local mod and select the ZIP. Ensure the dependencies are installed and launch the correct profile with Bonehilda enabled.
+[*]Install [b]this exact Bonehilda version on every client and the server[/b]. Restart after updating. Keep just one enabled copy of Bonehilda.dll in each installation.
+[/list]
+
+Switching from an earlier local import to a mod-manager download? Disable or remove the old imported mod before enabling the new copy, and do not load the world with both copies active. Keep the config file if you want to retain settings.
+
+[size=4][b]Configuration[/b][/size]
+The first launch creates BepInEx/config/com.bonehilda.valheim.cfg. Gameplay settings synchronize from the server through Jotunn. Diagnostics remain local.
+
+Useful options include Radius, SupplyInterval, FuelLowFraction, FuelRunwaySeconds, IdleWander, DustingInterval, SocialVisits, and SittingContinueChance. DustingInterval controls the interval between performed idle activities generally, including sitting and trophy visits. The default idle area follows the full work area.
+
+[size=4][b]Compatibility and testing status[/b][/size]
+[b]This is not a server-only mod.[/b] Every client needs the custom prefabs, clothing, and interactions. Vanilla clients cannot join a Bonehilda server.
+
+Built against Valheim 0.221.4 references and checked against installed Valheim 1.0.21 / Jotunn 2.30.2 libraries. Local gameplay has been exercised during development. Release {{VERSION}} passed the project's policy, package, and installed-library checks.
+
+[b]Multiplayer support is experimental.[/b] Dedicated-server gameplay, Linux hosting, and two-client ownership/save-reload scenarios have not yet been validated. See the [url={{REPOSITORY_URL}}/blob/main/docs/SERVER.md]server guide and test matrix[/url]. Bonehilda works only where the game loads the relevant objects; she provides no offline production or area loading.
+
+Crowded doors, difficult terrain, and obstructed interaction points can cause retries or deferred jobs. Mods that replace skeleton/player animation, inventories, pathfinding, or machine interactions may conflict. Other mod managers' automatic installation has not been validated; use the documented manual layout if needed.
+
+[size=4][b]Updating and removing[/b][/size]
+Back up your world before installation or updates. To uninstall, dismiss every maid, empty and dismantle every coffin in all explored locations, save, then remove the mod from server and clients together. Loading and saving without the custom-prefab mod can lose those objects.
+
+[size=4][b]Support[/b][/size]
+Use bonehilda_status in the F5 console for a snapshot of loaded maids. For detailed local records, enable Debugging.ActivityLogging. Report problems on [url={{REPOSITORY_URL}}/issues]GitHub[/url] with versions, steps, and relevant BepInEx/LogOutput.log excerpts. For multiplayer issues, include server and affected-client evidence. Review logs before posting: diagnostics include positions and inventory contents.
+
+[url={{REPOSITORY_URL}}]Source code[/url] | [url={{RELEASE_URL}}]Matching GitHub release[/url] | [url={{REPOSITORY_URL}}/blob/main/CHANGELOG.md]Changelog[/url]
+
+[size=4][b]AI disclosure and credits[/b][/size]
+The implementation, scripts, and listing text were developed with OpenAI Codex in collaboration with Swiftfingers, with substantial AI-generated code. The illustrative mod icon was generated with OpenAI imagegen; its generation prompt is included in ARTWORK.txt. The gallery uses existing in-engine/game captures rather than the illustrated icon. Original project meshes and palettes are exported from the included Blender scene. Skeletons, animation controllers, equipment visuals, shaders, effects, and sounds are referenced from the installed Valheim game; no synthetic voice pack or extracted game asset pack is included.
+
+Project source and original distributed artwork are MIT licensed; [url={{REPOSITORY_URL}}/blob/main/THIRD_PARTY_NOTICES.md]third-party credits and rights[/url] apply. Bonehilda and Sims references are an unofficial fan tribute, with no affiliation to EA, Maxis, or Iron Gate.

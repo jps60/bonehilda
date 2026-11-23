@@ -1,0 +1,1 @@
+Bonehilda {{VERSION}} by Swiftfingers. Requires BepInExPack_Valheim 5.4.2360 and Jotunn 2.30.2+. Install the same version on all clients and the server. Extract BepInEx into the game/server folder, or import the ZIP in r2modman. Dedicated-server multiplayer is experimental; see the mod description.

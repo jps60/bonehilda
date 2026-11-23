@@ -1,0 +1,26 @@
+[
+  {
+    "source": "assets/models/Valheim-world.png",
+    "filename": "01-coffins-and-maids.png",
+    "caption": "All three coffin tiers and their maids, shown in the game world.",
+    "role": "Suggested Nexus cover and first gallery image"
+  },
+  {
+    "source": "assets/models/Valheim-lineup.png",
+    "filename": "02-tier-lineup.png",
+    "caption": "In-engine lineup of the zero-, one-, and two-star maids and coffins.",
+    "role": "Tier and outfit comparison"
+  },
+  {
+    "source": "assets/models/Bonehilda-coffin-details.png",
+    "filename": "03-coffin-details.png",
+    "caption": "Coffin fronts, bone frames, tier markings, and recessed candles.",
+    "role": "Coffin details"
+  },
+  {
+    "source": "assets/models/Valheim-coffin-return.png",
+    "filename": "04-return-to-coffin.png",
+    "caption": "A two-star Bonehilda returns to rest behind her coffin's hinged door.",
+    "role": "Dismissal sequence"
+  }
+]
