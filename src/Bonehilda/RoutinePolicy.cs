@@ -4,6 +4,7 @@ namespace Bonehilda;
 
 internal static class RoutinePolicy
 {
+    internal static bool RepairSearchAllowed(float now, float retryAfter) => now >= retryAfter;
     internal static int Gesture(int count, int previous, float roll)
     {
         if (count <= 1) return 0;

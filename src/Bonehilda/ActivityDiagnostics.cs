@@ -40,6 +40,10 @@ internal sealed class MaidActivity
     public int walkSteps;
     public bool smoothStepping;
     public bool groundResting;
+    public float repairSearchDelay;
+    public string coffinStock = "", lastDeliveredItem = "", lastDeliveryTarget = "";
+    public int deliveries;
+    public int loadedDoors, doorCandidates, doorRejectedThreshold, doorRejectedApproach;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour

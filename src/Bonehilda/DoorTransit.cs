@@ -55,10 +55,11 @@ internal sealed class DoorTransit
             var leased = view.GetZDO().GetZDOID(MaidKey);
             if (leased != ZDOID.None && leased != maid.View.GetZDO().m_uid && view.GetZDO().GetLong(LeaseKey) > Now)
             { BlockedReason += ": another maid crossing"; return true; }
-            Geometry(door, out var center, out var normal, out var clearance);
+            Geometry(door, out var center, out var normal, out var halfDepth);
+            var clearance = DoorPolicy.CrossingDistance(maid.GetComponent<Character>().GetRadius(), halfDepth);
             var side = Vector3.Dot(maid.transform.position - center, normal) >= 0 ? 1f : -1f;
-            var from = center + normal * side * (clearance + .6f);
-            var exit = center - normal * side * (clearance + .6f);
+            var from = center + normal * side * clearance;
+            var exit = center - normal * side * clearance;
             if (!IdleActivities.Floor(from, maid.transform.position.y, out from)
                 || !IdleActivities.Floor(exit, maid.transform.position.y, out exit)
                 || !MaintenancePolicy.InRadius((exit - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
@@ -191,15 +192,27 @@ internal sealed class DoorTransit
         return false;
     }
 
-    internal static void Geometry(Door door, out Vector3 center, out Vector3 normal, out float clearance)
+    internal static void Geometry(Door door, out Vector3 center, out Vector3 normal, out float halfDepth)
     {
         var colliders = door.GetComponentsInChildren<Collider>().Where(c => c.enabled && !c.isTrigger).ToArray();
         var bounds = colliders.Length == 0 ? new Bounds(door.transform.position + Vector3.up, new Vector3(1, 2, .3f)) : colliders[0].bounds;
         foreach (var collider in colliders.Skip(1)) bounds.Encapsulate(collider.bounds);
         center = bounds.center; normal = door.transform.forward; normal.y = 0; normal.Normalize();
-        var right = Vector3.Cross(Vector3.up, normal);
-        var halfWidth = Vector3.Dot(bounds.extents, new Vector3(Mathf.Abs(right.x), 0, Mathf.Abs(right.z)));
-        clearance = Mathf.Clamp(halfWidth + .6f, 1.4f, 3f);
+        halfDepth = 0;
+        foreach (var collider in colliders)
+        {
+            var extent = Vector3.Dot(collider.bounds.extents, new Vector3(Mathf.Abs(normal.x), 0, Mathf.Abs(normal.z)));
+            // Project local collider axes so a rotated wide gate does not gain
+            // fictitious thickness from its world axis-aligned bounding box.
+            Vector3 local;
+            if (collider is BoxCollider box) local = box.size * .5f;
+            else if (collider is MeshCollider mesh && mesh.sharedMesh) local = mesh.sharedMesh.bounds.extents;
+            else { halfDepth = Mathf.Max(halfDepth, Mathf.Abs(Vector3.Dot(collider.bounds.center - center, normal)) + extent); continue; }
+            extent = Mathf.Abs(Vector3.Dot(collider.transform.TransformVector(Vector3.right * local.x), normal))
+                + Mathf.Abs(Vector3.Dot(collider.transform.TransformVector(Vector3.up * local.y), normal))
+                + Mathf.Abs(Vector3.Dot(collider.transform.TransformVector(Vector3.forward * local.z), normal));
+            halfDepth = Mathf.Max(halfDepth, Mathf.Abs(Vector3.Dot(collider.bounds.center - center, normal)) + extent);
+        }
     }
 
     private static bool ClearWalk(Vector3 from, Vector3 to)

@@ -22,6 +22,9 @@ internal sealed class DoorRoutePlanner
     private float expires;
     private bool cached;
     internal string Describe { get; private set; } = "none";
+    internal int Candidates { get; private set; }
+    internal int RejectedThreshold { get; private set; }
+    internal int RejectedApproach { get; private set; }
 
     internal bool TryPath(Maid maid, MonsterAI ai, Coffin home, Vector3 from, Vector3 goal, List<Vector3> result)
     {
@@ -48,20 +51,24 @@ internal sealed class DoorRoutePlanner
     private void Refresh(Maid maid, MonsterAI ai, Coffin home, Vector3 from)
     {
         cached = true; expires = Time.time + 2f; cachedFrom = from; entries.Clear();
+        Candidates = RejectedThreshold = RejectedApproach = 0;
         foreach (var door in MaidDoorWatch.Loaded.Where(d => d && DoorTransit.CanPlan(maid, home, d))
                      .OrderBy(d => (d.transform.position - from).sqrMagnitude).Take(8))
         {
-            DoorTransit.Geometry(door, out var center, out var normal, out var clearance);
+            Candidates++;
+            DoorTransit.Geometry(door, out var center, out var normal, out var halfDepth);
+            var clearance = DoorPolicy.CrossingDistance(maid.GetComponent<Character>().GetRadius(), halfDepth);
             var side = Vector3.Dot(from - center, normal) >= 0 ? 1f : -1f;
-            var approach = center + normal * side * (clearance + .6f);
-            var exit = center - normal * side * (clearance + .6f);
+            var approach = center + normal * side * clearance;
+            var exit = center - normal * side * clearance;
             if (!IdleActivities.Floor(approach, from.y, out approach) || !IdleActivities.Floor(exit, from.y, out exit)
                 || !MaintenancePolicy.InRadius((approach - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
                 || !MaintenancePolicy.InRadius((exit - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
                 || !Maid.Allowed(approach, home.Piece.GetCreator()) || !Maid.Allowed(exit, home.Piece.GetCreator())
-                || !RepairGeometry.ClearDoorway(maid, approach, exit, door)) continue;
+                || !RepairGeometry.ClearDoorway(maid, approach, exit, door)) { RejectedThreshold++; continue; }
             var entry = new Entry { Door = door, From = approach, Exit = exit, Center = center, Normal = normal };
             if (Segment(maid, ai, from, approach, entry.Path)) entries.Add(entry);
+            else RejectedApproach++;
         }
     }
 

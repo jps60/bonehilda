@@ -37,6 +37,7 @@ public sealed class Maid : MonoBehaviour
     private readonly Dictionary<string, float> lastSupplied = new Dictionary<string, float>();
     private Job? job;
     private float nextScan;
+    private float repairSearchAfter;
     private float nextAction;
     private float standUntil;
     private float jobStarted;
@@ -695,6 +696,9 @@ public sealed class Maid : MonoBehaviour
         cargo.RemoveItem(item, 1);
         SaveCargo();
         View.GetZDO().Set(LastDeliveryKey, ZNet.instance.GetTime().Ticks);
+        View.GetZDO().Set("BH_deliveries", View.GetZDO().GetInt("BH_deliveries") + 1);
+        View.GetZDO().Set("BH_lastDeliveredItem", Utils.GetPrefabName(delivery.Supply!.Resource.gameObject));
+        View.GetZDO().Set("BH_lastDeliveryTarget", delivery.View.GetZDO().m_uid);
         lastSupplied[SupplyKey(delivery)] = Time.time;
         WorkSounds.Supplied(delivery.Supply);
         supplyFailures.Succeeded(delivery.View.GetZDO().m_uid.ToString());
@@ -719,6 +723,7 @@ public sealed class Maid : MonoBehaviour
 
     private Job? FindJob(Coffin home, bool suppliesOnly = false)
     {
+        var allowRepairs = !suppliesOnly && RoutinePolicy.RepairSearchAllowed(Time.time, repairSearchAfter);
         pieces.Clear();
         Piece.GetAllPiecesInRadius(home.transform.position, Plugin.Radius.Value, pieces);
         TaskClaims.ObserveRecent();
@@ -738,12 +743,12 @@ public sealed class Maid : MonoBehaviour
                 .Where(option => Enabled(option) && option.NeedsItem && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
                 .OrderBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
-            var criticalRepair = Plugin.NaturalRoutines.Value && !suppliesOnly && !HasCargo && Plugin.Repair.Value
+            var criticalRepair = Plugin.NaturalRoutines.Value && allowRepairs && !HasCargo && Plugin.Repair.Value
                 && wear && wear.GetHealthPercentage() <= .25f && HasRepairStation(piece);
             if (criticalRepair) { candidate.Supply = null; candidate.Wear = wear; }
             else if (candidate.Supply == null)
             {
-                if (!suppliesOnly && Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage()) && HasRepairStation(piece)) candidate.Wear = wear;
+                if (allowRepairs && Plugin.Repair.Value && wear && MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage()) && HasRepairStation(piece)) candidate.Wear = wear;
                 else continue;
             }
             var distance = (piece.transform.position - transform.position).sqrMagnitude;
@@ -1124,6 +1129,13 @@ public sealed class Maid : MonoBehaviour
 
     private void SkipCurrentJob()
     {
+        if (job?.Wear && (repairRouteFailed || Time.time - jobStarted > Plugin.JobTimeout.Value))
+        {
+            // Failed repairs cannot keep choosing other unreachable repairs
+            // indefinitely while a ready machine has matching supplies.
+            repairSearchAfter = Time.time + Mathf.Max(5f, Plugin.ScanInterval.Value);
+            nextScan = Time.time;
+        }
         if (job?.Accepted == true && job.Piece) TaskClaims.Release(this, job.Piece);
         if (job != null && job.View && job.View.IsValid())
             skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(job.FailedSupply
@@ -1143,6 +1155,8 @@ public sealed class Maid : MonoBehaviour
             navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
             door = doors.Describe(this),
             doorBlockedReason = doors.BlockedReason, doorPlan = doorRoutes.Describe,
+            loadedDoors = MaidDoorWatch.Loaded.Count, doorCandidates = doorRoutes.Candidates,
+            doorRejectedThreshold = doorRoutes.RejectedThreshold, doorRejectedApproach = doorRoutes.RejectedApproach,
             doorsOpened = data.GetInt("BH_doorsOpened"), doorsClosed = data.GetInt("BH_doorsClosed"),
             reservation = TaskClaims.Describe(this),
             repairApproach = repairApproach.State, repairStandingPoint = repairApproach.Position,
@@ -1156,6 +1170,9 @@ public sealed class Maid : MonoBehaviour
             supplyEffectiveReach = job?.Supply != null ? SupplyReach(job.Piece) : Plugin.InteractionReach,
             supplyProbes = supplyApproach.Probes, supplyRejectedSpace = supplyApproach.RejectedSpace,
             supplyRejectedSight = supplyApproach.RejectedSight, supplyRejectedPath = supplyApproach.RejectedPath,
+            repairSearchDelay = Mathf.Max(0, repairSearchAfter - Time.time),
+            deliveries = data.GetInt("BH_deliveries"), lastDeliveredItem = data.GetString("BH_lastDeliveredItem"),
+            lastDeliveryTarget = data.GetZDOID("BH_lastDeliveryTarget").ToString(),
             interactionReach = Plugin.InteractionReach,
             animatorClips = string.Join(", ", animations.GetComponentInChildren<Animator>().GetCurrentAnimatorClipInfo(0).Select(c => c.clip.name)),
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,
@@ -1168,6 +1185,8 @@ public sealed class Maid : MonoBehaviour
         var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
         state.homeLoaded = home;
         state.chestInUse = home && home!.Chest.IsInUse();
+        if (home && View.IsOwner()) state.coffinStock = string.Join(", ", home!.Chest.GetInventory().GetAllItems()
+            .Select(item => (item.m_dropPrefab ? Utils.GetPrefabName(item.m_dropPrefab) : item.m_shared.m_name) + " x" + item.m_stack));
         if (job != null && job.Piece)
         {
             state.target = Utils.GetPrefabName(job.Piece.gameObject);

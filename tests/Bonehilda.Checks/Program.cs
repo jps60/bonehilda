@@ -2,6 +2,12 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("normal doorway crossing does not require two-meter clear runups", DoorPolicy.CrossingDistance(.4f, .1f) == .75f),
+    ("wide but thin gates keep a short threshold crossing", DoorPolicy.CrossingDistance(.4f, .1f) < 1f),
+    ("thick doors retain body clearance on both sides", DoorPolicy.CrossingDistance(.5f, .6f) >= 1.29f),
+    ("failed-repair grace interval leaves selection to supplies", !RoutinePolicy.RepairSearchAllowed(12, 15)),
+    ("repair eligibility returns when its grace interval expires", RoutinePolicy.RepairSearchAllowed(15, 15)),
+    ("normal repair selection is available without prior failure", RoutinePolicy.RepairSearchAllowed(0, 0)),
     ("80 percent continuation includes rolls below threshold", IdleDeck.ContinueSitting(.7999f, .8f)),
     ("continuation stops at the exact threshold", !IdleDeck.ContinueSitting(.8f, .8f)),
     ("summoned skeletts are social acquaintances", SocialPolicy.Classify("Skeleton_Friendly(Clone)", false, true, false, false, false, false) == SocialKind.Skeleton),

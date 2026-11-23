@@ -2,6 +2,8 @@ namespace Bonehilda;
 
 internal static class DoorPolicy
 {
+    internal static float CrossingDistance(float bodyRadius, float doorHalfDepth) =>
+        System.Math.Max(.75f, System.Math.Max(0f, bodyRadius) + System.Math.Max(0f, doorHalfDepth) + .2f);
     internal static bool EnemyNear(float doorDistanceSquared, float maidDistanceSquared, float radius) =>
         doorDistanceSquared <= radius * radius || maidDistanceSquared <= radius * radius;
 
