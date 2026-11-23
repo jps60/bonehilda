@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.33
+
+- Experimental branch only: prefer local bypasses around tames, and ask a blocking tame's owning peer for a short straight-away walk when bypasses are expensive or blocked.
+- Limit requests to calm, waiting, unridden tames, with supported body-clear destinations, work-radius/ward checks, no door/gate crossings and per-tame cooldowns. Preserve native physics, combat updates and player commands.
+- Add separate crowd/bypass/shoo settings and diagnostics. No custom shoo animation, server-run AI or stable-profile installation.
+
 ## 0.4.32
 
 - Deliver the release tooling introduced in the unpublished 0.4.31 tag: current-game CI checks, validated version bumping, tagged artwork and automatic GitHub/Thunderstore publishing.

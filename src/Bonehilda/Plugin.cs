@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.32";
+    public const string Version = "0.4.33";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -58,6 +58,8 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<bool> UseDoors = null!;
     internal static ConfigEntry<float> DoorEnemyRadius = null!;
     internal static ConfigEntry<bool> ActivityLogging = null!;
+    internal static ConfigEntry<bool> TameCrowdEnabled = null!, TameShooEnabled = null!;
+    internal static ConfigEntry<float> TameShooDistance = null!, TameCrowdDelay = null!, TameShooCooldown = null!;
     internal static HashSet<string> LegacySkeletonNames = new HashSet<string>(StringComparer.Ordinal);
     private Harmony harmony = null!;
     private bool registered;
@@ -107,6 +109,11 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);
         ActivityLogging = Config.Bind("Debugging", "ActivityLogging", false, "Write loaded maid activity, target, path, and cargo snapshots every two seconds to Bonehilda.activity.json and a bounded history log. Local diagnostics only.");
+        TameCrowdEnabled = Config.Bind("Experimental", "TameCrowdEnabled", true, new ConfigDescription("Experimental local bypasses around nearby tames. Disable for the unchanged native navigation baseline.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        TameShooEnabled = Config.Bind("Experimental", "TameShooEnabled", true, new ConfigDescription("Ask a blocking calm, waiting tame to walk directly away when a short bypass is unavailable. No shoo animation. Disable to test bypasses alone.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        TameShooDistance = Setting("Experimental", "TameShooDistance", 4f, "Preferred straight-away walking target. Targets span 3.5-5 meters to allow for the native arrival tolerance, yielding roughly 3-5 meters of walking. Must be supported, clear, within the work radius and without door crossings.", 3.5f, 5f);
+        TameCrowdDelay = Setting("Experimental", "TameCrowdDelay", 1.25f, "Observed crowd obstruction before considering shooing. Short bypasses win immediately.", .5f, 5f);
+        TameShooCooldown = Setting("Experimental", "TameShooCooldown", 20f, "Per-tame cooldown between accepted requests.", 10f, 120f);
         gameObject.AddComponent<ActivityDiagnostics>();
         gameObject.AddComponent<SessionNotice>();
         CommandManager.Instance.AddConsoleCommand(new ActivityCommand());

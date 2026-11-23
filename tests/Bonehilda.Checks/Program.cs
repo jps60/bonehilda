@@ -22,6 +22,13 @@ static bool NewWalkResetsProgress()
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("no shoo before a real stall", !TameCrowdPolicy.PreferShoo(float.PositiveInfinity, 2, 1, 1.25f)),
+    ("short detour wins over disturbing a tame", !TameCrowdPolicy.PreferShoo(2, 2, 2, 1.25f)),
+    ("long detour can justify shoo after delay", TameCrowdPolicy.PreferShoo(5, 2, 2, 1.25f)),
+    ("blocked bypass permits shoo after delay", TameCrowdPolicy.PreferShoo(float.PositiveInfinity, 2, 2, 1.25f)),
+    ("running makes a detour cheaper", !TameCrowdPolicy.PreferShoo(5, 5, 2, 1.25f)),
+    ("bypass cannot overshoot a short waypoint", !TameCrowdPolicy.WithinSegment(1, 3)),
+    ("bypass before waypoint remains valid", TameCrowdPolicy.WithinSegment(5, 4)),
     ("long productive detours renew the stall timer", ProductiveDetour()),
     ("circling without shortening the route still times out", CirclingTimesOut()),
     ("outbound pickup walk gets a fresh progress baseline", NewWalkResetsProgress()),

@@ -159,6 +159,7 @@ internal sealed class DoorTransit
             var offset = target - maid.transform.position; offset.y = 0;
             if (offset.magnitude > .25f)
             {
+                if (maid.CrowdStep(target, delta, true)) return true;
                 maid.StepToward(target, delta);
                 var clear = ClearWalk(maid.transform.position, target);
                 if (clear) ai.MoveTowards(offset, true); else ai.MoveTo(delta, target, .2f, true);
@@ -184,6 +185,7 @@ internal sealed class DoorTransit
                 }
                 if (hasEscape)
                 {
+                    if (maid.CrowdStep(escape, delta, true)) return true;
                     maid.StepToward(escape, delta);
                     if (maid.Stepping) { ai.StopMoving(); return true; }
                     if (RepairGeometry.ClearWalk(maid, escape)) ai.MoveTowards(escape - maid.transform.position, true);

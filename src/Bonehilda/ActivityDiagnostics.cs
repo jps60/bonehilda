@@ -12,6 +12,9 @@ internal sealed class MaidActivity
 {
     public string waitingReason = "";
     public int scanPieces, scanDeferred, scanReserved, scanRestricted, scanMissingStation, scanNoSupply;
+    public int crowdBypasses, shooRequests;
+    public float crowdBlockedSeconds;
+    public string crowdState = "none";
     public float scanMilliseconds, scanAgeSeconds;
     public string id = "", name = "", activity = "", phase = "", target = "", targetId = "", cargo = "", idle = "", door = "", station = "", reservation = "";
     public int stars, pathNodes, repairRetries, skippedJobs;

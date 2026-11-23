@@ -1,0 +1,30 @@
+[
+    {
+        "mode":  [
+                     "native",
+                     "shoo"
+                 ],
+        "observationSeconds":  [
+                                   120,
+                                   120
+                               ],
+        "zeroStarBarleyDeliveries":  [
+                                         1,
+                                         1
+                                     ],
+        "zeroStarShooRequests":  [
+                                     0,
+                                     11
+                                 ],
+        "zeroStarBypasses":  [
+                                 0,
+                                 0
+                             ],
+        "zeroStarCargoAtEnd":  [
+                                   "",
+                                   ""
+                               ],
+        "acceptedShoosAllMaids":  1,
+        "bypassesAllMaids":  1
+    }
+]
