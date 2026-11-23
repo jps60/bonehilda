@@ -35,6 +35,17 @@ internal sealed class MaidSeating : MonoBehaviour
         actor.m_onDeath += Stand;
     }
 
+    internal void RecoverSavedPose()
+    {
+        if (!view || !view.IsValid() || !view.IsOwner() || pose.Length != 0) return;
+        var sync = GetComponent<ZSyncAnimation>();
+        sync.SetBool("attach_chair", false); sync.SetBool("attach_throne", false);
+        if (view.GetZDO().GetZDOID(SeatKey) == ZDOID.None) return;
+        view.GetZDO().Set(SeatKey, ZDOID.None);
+        var exit = view.GetZDO().GetVec3("BH_seatReturn", transform.position);
+        if (SafeExit(exit)) { transform.position = exit; body.position = exit; }
+    }
+
     internal bool Sit(Chair target)
     {
         if (Attached || !view.IsValid() || !view.IsOwner() || !SupportedPose(target) || IsInUse(target) || !target.m_attachPoint) return false;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using HarmonyLib;
 using UnityEngine;
 using Random = UnityEngine.Random;
@@ -10,6 +11,8 @@ namespace Bonehilda;
 // ownership, taming state, inventory, and (in Odin's case) disappearance rules.
 internal sealed class SocialVisits
 {
+    private static readonly Dictionary<SocialVisits, Vector3> audiences = new Dictionary<SocialVisits, Vector3>();
+    private bool priorityOdin;
     private readonly Dictionary<ZDOID, long> cooldowns = new Dictionary<ZDOID, long>();
     private Component? target;
     private SocialKind kind;
@@ -23,24 +26,27 @@ internal sealed class SocialVisits
     internal ZNetView? Target => target ? target!.GetComponent<ZNetView>() : null;
     internal string Describe => target ? kind + ": " + target!.name + (reacting ? " greeting" : " approaching") : "none";
 
-    internal bool TryBegin(Maid maid, Coffin home)
+    internal bool TryBegin(Maid maid, Coffin home, bool odinOnly = false)
     {
+        priorityOdin = odinOnly;
+        audiences.Remove(this);
         target = null; Performed = false; reacting = false; settledAt = 0;
         bestShelter = -1;
         searchCenter = maid.transform.position;
-        if (DangerNear(maid, maid.transform.position)) return false;
+        if (!priorityOdin && DangerNear(maid, maid.transform.position)) return false;
         var now = ZNet.instance.GetTime().Ticks;
         foreach (var id in new List<ZDOID>(cooldowns.Keys)) if (cooldowns[id] <= now) cooldowns.Remove(id);
         var best = float.PositiveInfinity;
         foreach (var character in Character.GetAllCharacters())
         {
-            if (!character || character.gameObject == maid.gameObject) continue;
+            if (priorityOdin || !character || character.gameObject == maid.gameObject) continue;
             var category = Classify(maid, character);
             if (category != SocialKind.None) Consider(maid, home, character, category, now, ref best);
         }
         foreach (var odin in OdinWatch.Loaded)
             if (odin) Consider(maid, home, odin, SocialKind.Odin, now, ref best);
         deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, standingPoint) : 0f, 20f);
+        if (priorityOdin && target) audiences[this] = standingPoint;
         return target;
     }
 
@@ -49,12 +55,12 @@ internal sealed class SocialVisits
         var view = candidate.GetComponent<ZNetView>();
         if (!view || !view.IsValid() || !SocialPolicy.InRange((candidate.transform.position - searchCenter).sqrMagnitude,
                 (candidate.transform.position - home.transform.position).sqrMagnitude, Plugin.SocialRadius.Value, Plugin.Radius.Value)
-            || !maid.CanIdleVisit(view) || !TaskClaims.Available(maid, view, work: false)
-            || !Maid.Allowed(candidate.transform.position, home.Piece.GetCreator()) || DangerNear(maid, candidate.transform.position)) return;
+            || !priorityOdin && (!maid.CanIdleVisit(view) || !TaskClaims.Available(maid, view, work: false))
+            || !Maid.Allowed(candidate.transform.position, home.Piece.GetCreator()) || !priorityOdin && DangerNear(maid, candidate.transform.position)) return;
         var id = view.GetZDO().m_uid;
-        if (cooldowns.TryGetValue(id, out var until) && SocialPolicy.CoolingDown(now, until)) return;
+        if (!priorityOdin && cooldowns.TryGetValue(id, out var until) && SocialPolicy.CoolingDown(now, until)) return;
         var data = maid.View.GetZDO();
-        if (data.GetZDOID("BH_lastSocial") == id && SocialPolicy.CoolingDown(now, data.GetLong("BH_lastSocialUntil"))) return;
+        if (!priorityOdin && data.GetZDOID("BH_lastSocial") == id && SocialPolicy.CoolingDown(now, data.GetLong("BH_lastSocialUntil"))) return;
         var character = candidate as Character;
         var distance = category == SocialKind.Odin ? 4f : Mathf.Max(1.6f, character!.GetRadius() + 1f);
         var toward = maid.transform.position - candidate.transform.position; toward.y = 0;
@@ -67,6 +73,7 @@ internal sealed class SocialVisits
                 || Mathf.Abs(point.y - candidate.transform.position.y) > .75f
                 || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, Plugin.Radius.Value) || !Maid.Allowed(point, home.Piece.GetCreator())
                 || !SpaceFree(maid, point) || !Visible(point + maid.GetComponent<Character>().GetEyePoint() - maid.transform.position, Aim(candidate))) continue;
+            if (priorityOdin && audiences.Values.Any(p => (p - point).sqrMagnitude < 1.44f)) continue;
             var score = (point - maid.transform.position).sqrMagnitude;
             var shelter = IdleShelter.Tier(point);
             if (shelter < bestShelter || shelter == bestShelter && score >= best || !maid.CanIdleApproach(home, point)) continue;
@@ -87,7 +94,7 @@ internal sealed class SocialVisits
             return true;
         }
         var aim = Aim(target!);
-        if (!Visible(maid.GetComponent<Character>().GetEyePoint(), aim)) return false;
+        if (!(priorityOdin && reacting) && !Visible(maid.GetComponent<Character>().GetEyePoint(), aim)) return false;
         maid.StopNavigation(); ai.StopMoving(); ai.LookAt(aim);
         var facing = aim - maid.transform.position; facing.y = 0;
         if (!reacting && Vector3.Dot(maid.transform.forward, facing.normalized) > .9f)
@@ -95,9 +102,10 @@ internal sealed class SocialVisits
             if (settledAt == 0) settledAt = Time.time + .6f;
             if (Time.time < settledAt) return true;
             var choices = SocialPolicy.Emotes[kind];
-            emote = IdleRoutine.Gesture(maid, "social_" + kind, choices);
-            maid.GetComponent<WorkAnimations>().Emote(emote, 5f);
-            reacting = true; Performed = true; deadline = Time.time + 5f;
+            emote = priorityOdin ? "kneel" : IdleRoutine.Gesture(maid, "social_" + kind, choices);
+            if (priorityOdin) maid.GetComponent<WorkAnimations>().RestEmote(emote);
+            else maid.GetComponent<WorkAnimations>().Emote(emote, 5f);
+            reacting = true; Performed = true; deadline = priorityOdin ? float.PositiveInfinity : Time.time + 5f;
             var until = ZNet.instance.GetTime().Ticks + (long)(Plugin.SocialTargetCooldown.Value * TimeSpan.TicksPerSecond);
             var id = Target.GetZDO().m_uid;
             cooldowns[id] = until;
@@ -114,7 +122,7 @@ internal sealed class SocialVisits
         return SocialPolicy.InPlace(offset.x * offset.x + offset.z * offset.z, offset.y)
             && SocialPolicy.InRange((point - searchCenter).sqrMagnitude, (point - home.transform.position).sqrMagnitude,
                 Plugin.SocialRadius.Value, Plugin.Radius.Value)
-            && Maid.Allowed(point, home.Piece.GetCreator()) && !DangerNear(maid, point) && !DangerNear(maid, maid.transform.position)
+            && Maid.Allowed(point, home.Piece.GetCreator()) && (priorityOdin || !DangerNear(maid, point) && !DangerNear(maid, maid.transform.position))
             && (kind == SocialKind.Odin || target is Character character && Classify(maid, character) == kind);
     }
 
@@ -150,6 +158,7 @@ internal sealed class SocialVisits
 
     internal void Cancel(Maid maid)
     {
+        audiences.Remove(this);
         if (reacting)
         {
             maid.GetComponent<WorkAnimations>().StopEmote();

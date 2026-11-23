@@ -21,7 +21,7 @@ public sealed class Maid : MonoBehaviour
     internal bool HasCargo => cargo != null && cargo.GetAllItems().Count > 0;
     internal bool Stepping => ledges.Stepping;
     internal bool AvailableForSocial => View && View.IsValid() && !OffDuty && !InCoffinPassage(View.GetZDO())
-        && !HasCargo && job?.Accepted != true && phase == WorkPhase.None && !Stepping
+        && !HasCargo && !audienceActive && job?.Accepted != true && phase == WorkPhase.None && !Stepping
         && !(View.GetZDO().GetBool("BH_taskWork") && View.GetZDO().GetLong("BH_taskUntil") > ZNet.instance.GetTime().Ticks)
         && View.GetZDO().GetZDOID("BH_openDoor") == ZDOID.None;
     internal bool OffDuty => View && View.IsValid() && (View.GetZDO().GetBool(ReturningKey) || View.GetZDO().GetBool("BH_stowing"));
@@ -67,6 +67,12 @@ public sealed class Maid : MonoBehaviour
     private float wanderUntil;
     private MovementPace pace;
     private readonly IdleActivities idle = new IdleActivities();
+    private readonly SocialVisits odinAudience = new SocialVisits();
+    private bool audienceActive;
+    private float nextAudience, nextAudienceRepair;
+    private Job? audienceRepair;
+    private readonly RepairApproach audienceApproach = new RepairApproach();
+    private readonly RepairRetries audienceRetries = new RepairRetries();
     private readonly DoorTransit doors = new DoorTransit();
     private readonly DoorRoutePlanner doorRoutes = new DoorRoutePlanner();
     private readonly List<Vector3> doorPath = new List<Vector3>();
@@ -86,7 +92,7 @@ public sealed class Maid : MonoBehaviour
     }
     private enum WorkPhase { None, Drawing, Repairing, Recovering, Holstering, Supplying, FinishingSupply }
     private void OnEnable() => Loaded.Add(this);
-    private void OnDisable() { ledges.Reset(); TaskClaims.Release(this); Loaded.Remove(this); }
+    private void OnDisable() { EndAudience(); ledges.Reset(); TaskClaims.Release(this); Loaded.Remove(this); }
 
     private void FixedUpdate()
     {
@@ -101,7 +107,7 @@ public sealed class Maid : MonoBehaviour
         internal SupplyTarget? Supply;
         internal ZNetView View = null!;
         internal bool Accepted;
-        internal bool PickupRouteStarted, FailedSupply;
+        internal bool PickupRouteStarted, FailedSupply, Delivered;
     }
 
     private void Awake()
@@ -132,6 +138,7 @@ public sealed class Maid : MonoBehaviour
 
     internal void Bind(Coffin coffin, bool emerge = false)
     {
+        View.GetZDO().Set(HomeIdentity.Key, HomeIdentity.Ensure(coffin.View.GetZDO()));
         View.GetZDO().Set(HomeKey, coffin.View.GetZDO().m_uid);
         View.GetZDO().Set("BH_homePosition", coffin.transform.position);
         character.SetLevel(coffin.Level); // Character level 1/2/3 means zero/one/two stars.
@@ -244,6 +251,8 @@ public sealed class Maid : MonoBehaviour
             nextHomeCheck = Time.time + 10f;
             TaskClaims.Release(this);
             StopNavigation();
+            GetComponent<MaidSeating>().RecoverSavedPose();
+            ResetPath(); nextScan = Time.time;
             ai.m_randomMoveInterval = Plugin.WanderInterval.Value;
             ai.ResetRandomMovement();
             // Discard local plans after an ownership handoff; committed cargo/cooldown live in the ZDO.
@@ -327,6 +336,7 @@ public sealed class Maid : MonoBehaviour
             return;
         }
 
+        if (TickAudience(home, delta)) return;
         if (phase != WorkPhase.None)
         {
             StopNavigation();
@@ -469,6 +479,64 @@ public sealed class Maid : MonoBehaviour
             if (Vector3.Distance(transform.position, home.transform.position) > 3f) Navigate(home.ApproachPosition, delta, 1f);
             else { StopNavigation(); ai.StopMoving(); }
         }
+    }
+
+    private bool TickAudience(Coffin home, float delta)
+    {
+        if (!Plugin.SocialVisits.Value || OdinWatch.Loaded.Count == 0) { EndAudience(); return false; }
+        if (job?.Accepted == true && job.Wear && job.Wear!.GetHealthPercentage() <= .25f && Valid(job, home))
+        { EndAudience(); return false; }
+        if (!audienceActive)
+        {
+            if (Time.time < nextAudience) return false;
+            nextAudience = Time.time + 3f;
+            if (!odinAudience.TryBegin(this, home, odinOnly: true)) return false;
+            CancelJob(preserveAudience: true, defer: false);
+            audienceActive = true; nextAudienceRepair = 0;
+        }
+        // Check critical work in the background without dropping the kneel for
+        // unreachable damage. A validated critical repair alone preempts Odin.
+        if (audienceRepair == null && Time.time >= nextAudienceRepair)
+        {
+            audienceRepair = FindJob(home, criticalOnly: true);
+            audienceApproach.Reset(); audienceRetries.Reset();
+            nextAudienceRepair = Time.time + Plugin.ScanInterval.Value;
+        }
+        if (audienceRepair != null)
+        {
+            if (!Valid(audienceRepair, home) || audienceRepair.Wear!.GetHealthPercentage() > .25f) audienceRepair = null;
+            else
+            {
+                var result = WithinRepairReach(audienceRepair.Piece, RepairPoint(audienceRepair.Piece))
+                    ? RepairApproach.Result.Ready : audienceApproach.Tick(this, ai, home, audienceRepair.Piece, out _);
+                if (result == RepairApproach.Result.Ready && TaskClaims.TryClaim(this, audienceRepair.Piece, "critical repair", work: true))
+                {
+                    var critical = audienceRepair;
+                    EndAudience(); job = critical; job.Accepted = true;
+                    jobStarted = Time.time; phase = WorkPhase.None; ResetRepairRoute(); StopNavigation();
+                    return false;
+                }
+                if (result == RepairApproach.Result.Failed)
+                {
+                    if (!audienceRetries.TryAgain())
+                    {
+                        skipped[audienceRepair.View.GetZDO().m_uid] = Time.time + 60f;
+                        audienceRepair = null;
+                    }
+                    audienceApproach.Retry();
+                }
+            }
+        }
+        SetPace(MovementPace.Idle);
+        if (odinAudience.Tick(this, ai, home, delta)) return true;
+        EndAudience(); nextScan = Time.time;
+        return false;
+    }
+
+    private void EndAudience()
+    {
+        if (audienceActive) { odinAudience.Cancel(this); StopNavigation(); }
+        audienceActive = false; audienceRepair = null; audienceApproach.Reset(); audienceRetries.Reset();
     }
 
     private void TickWander(Coffin home, float delta)
@@ -655,6 +723,10 @@ public sealed class Maid : MonoBehaviour
                 if (Valid(job, home) && WithinWorkReach(job.Piece, point) && SupplyReady()) DeliverSupply(home, job);
                 SetPhase(WorkPhase.FinishingSupply, 0.3f);
                 break;
+            case WorkPhase.FinishingSupply:
+                if (job.Delivered) ContinueSupplies(home);
+                else CancelJob();
+                break;
             default:
                 CancelJob();
                 break;
@@ -700,7 +772,8 @@ public sealed class Maid : MonoBehaviour
         if (!delivery.View.IsOwner() || !Valid(delivery, home)) return;
         var item = cargo.GetAllItems().FirstOrDefault();
         if (item == null || !delivery.Supply!.Matches(item)) return;
-        if (!delivery.Supply.Deliver(item)) return;
+        if (!delivery.Supply.Deliver(item)) { delivery.FailedSupply = true; return; }
+        delivery.Delivered = true;
         cargo.RemoveItem(item, 1);
         SaveCargo();
         if (delivery.Supply.Fuel && !delivery.Supply.NeedsItem) fuelRuns.Remove(SupplyKey(delivery));
@@ -712,6 +785,22 @@ public sealed class Maid : MonoBehaviour
         WorkSounds.Supplied(delivery.Supply);
         supplyFailures.Succeeded(delivery.View.GetZDO().m_uid.ToString());
         RememberWork(true);
+    }
+
+    private void ContinueSupplies(Coffin home)
+    {
+        var current = job!;
+        var next = FindJob(home);
+        var stocked = current.Supply != null && home.Chest.GetInventory().GetAllItems().Any(current.Supply.Matches);
+        var keep = SupplyContinuation.Keep(Valid(current, home), stocked,
+            next == null ? int.MaxValue : WorkPriority(next), WorkPriority(current));
+        if (!keep) TaskClaims.Release(this, current.Piece);
+        // Successful deliveries never enter the failed-target skip list. Keep
+        // the reservation and immediately fetch another item if work remains.
+        job = keep ? current : next;
+        if (job != null) { job.Delivered = false; job.PickupRouteStarted = false; }
+        phase = WorkPhase.None; jobStarted = Time.time; nextScan = Time.time;
+        ResetRepairRoute(); StopNavigation();
     }
 
     private void RememberWork(bool supplied)
@@ -731,7 +820,7 @@ public sealed class Maid : MonoBehaviour
             candidate.Supply?.Fuel == true);
     }
 
-    private Job? FindJob(Coffin home, bool suppliesOnly = false)
+    private Job? FindJob(Coffin home, bool suppliesOnly = false, bool criticalOnly = false)
     {
         var allowRepairs = !suppliesOnly && RoutinePolicy.RepairSearchAllowed(Time.time, repairSearchAfter);
         pieces.Clear();
@@ -748,18 +837,20 @@ public sealed class Maid : MonoBehaviour
             if (skipped.TryGetValue(view.GetZDO().m_uid, out var until) && Time.time < until) continue;
             if (!TaskClaims.Available(this, piece, work: true)) continue;
             var wear = piece.GetComponent<WearNTear>();
+            if (criticalOnly && (!wear || !MaintenancePolicy.NeedsRepair(wear.GetHealthPercentage())
+                || wear.GetHealthPercentage() > .25f || !HasRepairStation(piece))) continue;
             var candidate = new Job { Piece = piece, View = view };
             var options = SupplyTarget.ForPiece(piece).ToArray();
             foreach (var option in options)
                 if (!option.NeedsItem) fuelRuns.Remove(view.GetZDO().m_uid + ":" + option.Kind);
             candidate.Supply = options
-                .Where(option => Enabled(option) && option.NeedsItem
+                .Where(option => !criticalOnly && Enabled(option) && option.NeedsItem
                     && (!option.Fuel || HasCargo || option.LowFuel || fuelRuns.Contains(view.GetZDO().m_uid + ":" + option.Kind))
                     && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
                 .OrderByDescending(option => option.Depleted).ThenByDescending(option => option.Fuel)
                 .ThenBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
-            var criticalRepair = Plugin.NaturalRoutines.Value && allowRepairs && !HasCargo && Plugin.Repair.Value
+            var criticalRepair = (Plugin.NaturalRoutines.Value || criticalOnly) && allowRepairs && (criticalOnly || !HasCargo) && Plugin.Repair.Value
                 && wear && wear.GetHealthPercentage() <= .25f && HasRepairStation(piece);
             if (criticalRepair) { candidate.Supply = null; candidate.Wear = wear; }
             else if (candidate.Supply == null)
@@ -1110,14 +1201,16 @@ public sealed class Maid : MonoBehaviour
         nextAction = Time.time + 0.55f;
     }
 
-    private void CancelJob(bool preserveIdle = false)
+    private void CancelJob(bool preserveIdle = false, bool preserveAudience = false, bool defer = true)
     {
+        if (!preserveAudience) EndAudience();
         if (!preserveIdle) idle.Cancel(this);
         // Chained repairs can be walking with the hammer drawn and no active
         // animation phase. Dismissal, invalid targets, and timeouts still stow it.
         if (animations.HammerDrawn) animations.SetHammer(false);
         phase = WorkPhase.None;
-        SkipCurrentJob();
+        if (defer) SkipCurrentJob();
+        else if (job?.Accepted == true && job.Piece) TaskClaims.Release(this, job.Piece);
         job = null;
         ResetRepairRoute();
         if (!preserveIdle) ai.StopMoving();
@@ -1172,11 +1265,12 @@ public sealed class Maid : MonoBehaviour
         var state = new MaidActivity { id = data.m_uid.ToString(), name = data.GetString("TamedName", "Bonehilda"),
             localOwner = View.IsOwner(), stars = character.GetLevel() - 1, position = transform.position, phase = phase.ToString(),
             alerted = ai.IsAlerted(), hasCargo = HasCargo, cargo = string.Join(", ", cargo.GetAllItems().Select(i => Utils.GetPrefabName(i.m_dropPrefab) + " x" + i.m_stack)),
-            activity = data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle"
+            activity = audienceActive ? "Odin audience" : data.GetBool(ReturningKey) ? "returning" : data.GetBool(ExitingKey) ? "exiting" : job == null ? HasCargo ? "returning cargo" : "idle"
                 : !job.Accepted ? job.Wear ? "idle / checking repair" : "idle / checking supply" : job.Wear ? "repair" : "supply",
             movementPace = pace.ToString(), workAccepted = job?.Accepted == true,
             jobAge = job == null ? 0 : Time.time - jobStarted, pathNodes = ai.m_path.Count, repairRetries = repairRetries.Count, skippedJobs = skipped.Count,
-            navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint, idle = idle.Describe,
+            navigationGoal = navigationGoal, recovering = recoveringRoute, recoveryPoint = recoveryPoint,
+            idle = audienceActive ? "Odin: " + odinAudience.Describe : idle.Describe,
             door = doors.Describe(this),
             doorBlockedReason = doors.BlockedReason, doorPlan = doorRoutes.Describe,
             loadedDoors = MaidDoorWatch.Loaded.Count, doorCandidates = doorRoutes.Candidates,

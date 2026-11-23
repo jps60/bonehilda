@@ -2,6 +2,20 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("stable home identity survives runtime ID changes", HomeIdentityPolicy.HomeMatches("home-guid", "home-guid", 10000)),
+    ("foreign home token cannot match merely by position", !HomeIdentityPolicy.HomeMatches("old-guid", "new-guid", 0)),
+    ("legacy maids can recover their unique saved home position", HomeIdentityPolicy.HomeMatches("", "", .01f)),
+    ("legacy migration does not adopt a distant coffin", !HomeIdentityPolicy.HomeMatches("", "", 1)),
+    ("missing legacy home position cannot be adopted", !HomeIdentityPolicy.HomeMatches("", "", float.PositiveInfinity)),
+    ("tokenless legacy maid can migrate to an identified home", HomeIdentityPolicy.MaidMatches("", "home-guid", 0)),
+    ("identified maid cannot attach to a different legacy home", !HomeIdentityPolicy.MaidMatches("other-guid", "", 0)),
+    ("ambiguous or absent recovery candidates are never selected", !HomeIdentityPolicy.Unique(0) && !HomeIdentityPolicy.Unique(2) && HomeIdentityPolicy.Unique(1)),
+    ("stocked accepted machine continues without a success cooldown", SupplyContinuation.Keep(true, true, int.MaxValue, 3)),
+    ("equal-priority alternatives do not force an idle break", SupplyContinuation.Keep(true, true, 3, 3)),
+    ("empty coffin ends the supply chain", !SupplyContinuation.Keep(true, false, int.MaxValue, 3)),
+    ("full or reserved destination ends the supply chain", !SupplyContinuation.Keep(false, true, int.MaxValue, 3)),
+    ("critical repairs can preempt continued supplying", !SupplyContinuation.Keep(true, true, 0, 3)),
+    ("needed fuel can preempt continued processor input", !SupplyContinuation.Keep(true, true, 2, 3)),
     ("quarter-capacity trigger refuels slow-burning fixtures", FuelPolicy.Start(2, 10, 3600, .25f, 120)),
     ("exact quarter capacity alone does not trigger a topoff", !FuelPolicy.Start(2.5f, 10, 3600, .25f, 120)),
     ("short runway triggers even above quarter capacity", FuelPolicy.Start(8, 10, 10, .25f, 120)),

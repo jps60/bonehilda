@@ -216,6 +216,26 @@ internal static class Network
         var valid = linked != null && (isCoffin
             ? linked.GetPrefab() == Plugin.MaidPrefab.GetStableHashCode() && linked.GetZDOID(Maid.HomeKey) == holderId
             : CoffinTier.IsCoffin(linked.GetPrefab()) && linked.GetZDOID(Coffin.MaidKey) == holderId);
+        if (valid)
+        {
+            var home = isCoffin ? holder : linked!;
+            var worker = isCoffin ? linked! : holder;
+            var token = worker.GetString(HomeIdentity.Key);
+            valid = HomeIdentityPolicy.HomeMatches(token, home.GetString(HomeIdentity.Key),
+                (worker.GetVec3("BH_homePosition", new Vector3(float.PositiveInfinity, 0, 0)) - home.GetPosition()).sqrMagnitude);
+        }
+        if (!valid && HomeIdentity.Repair(holder))
+        {
+            Confirmation.Confirm(holderId.ToString(), linkedId.ToString(), sender, true, ZNet.instance.GetTime().Ticks);
+            Plugin.Instance.LogInfo("Restored saved Bonehilda " + (isCoffin ? "coffin" : "maid") + " link for " + holderId);
+            return;
+        }
+        if (valid)
+        {
+            var home = isCoffin ? holder : linked!;
+            var worker = isCoffin ? linked! : holder;
+            worker.Set(HomeIdentity.Key, HomeIdentity.Ensure(home));
+        }
         if (!Confirmation.Confirm(holderId.ToString(), linkedId.ToString(), sender, valid, ZNet.instance.GetTime().Ticks)) return;
         Plugin.Instance.LogInfo("Confirmed broken " + (isCoffin ? "coffin" : "maid") + " link: " + holderId + " -> " + linkedId);
         ZRoutedRpc.instance.InvokeRoutedRPC(sender, MissingRpc, holderId, linkedId);

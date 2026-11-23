@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.24";
+    public const string Version = "0.4.25";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -126,6 +126,7 @@ public sealed class Plugin : BaseUnityPlugin
             TrophyVisits.Configure();
             var maid = new CustomCreature(MaidPrefab, "Skeleton_Friendly", new CreatureConfig { Name = "Bonehilda" });
             var prefab = maid.Prefab;
+            prefab.GetComponent<ZNetView>().m_persistent = true;
             var character = prefab.GetComponent<Humanoid>();
             character.m_name = "Bonehilda";
             character.m_faction = Character.Faction.Players;
