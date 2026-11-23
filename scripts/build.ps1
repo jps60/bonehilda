@@ -13,6 +13,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
     if (-not $SkipChecks) {
         & (Join-Path $projectRoot 'tests/ReleaseTools.Checks.ps1')
+        & (Join-Path $projectRoot 'tests/ReferenceArchive.Checks.ps1')
         & $Dotnet run --project tests/Bonehilda.Checks/Bonehilda.Checks.csproj -c Release
         if ($LASTEXITCODE -ne 0) { throw 'Maintenance policy checks failed.' }
     }

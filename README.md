@@ -2,7 +2,7 @@
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.31 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.32 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
 ![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/main/assets/icon.png)
 

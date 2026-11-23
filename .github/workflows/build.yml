@@ -77,8 +77,11 @@ jobs:
           jotunn=$(jq -r '.dependencies[] | select(startswith("ValheimModding-Jotunn-")) | ltrimstr("ValheimModding-Jotunn-")' "$RUNNER_TEMP/package/manifest.json")
           curl --fail --location --retry 3 "https://thunderstore.io/package/download/denikson/BepInExPack_Valheim/$bepinex/" -o "$RUNNER_TEMP/bepinex.zip"
           curl --fail --location --retry 3 "https://thunderstore.io/package/download/ValheimModding/Jotunn/$jotunn/" -o "$RUNNER_TEMP/jotunn.zip"
-          unzip -q "$RUNNER_TEMP/bepinex.zip" -d "$RUNNER_TEMP/bepinex"
-          unzip -q "$RUNNER_TEMP/jotunn.zip" -d "$RUNNER_TEMP/jotunn"
+      - name: Extract dependency archives with portable paths
+        shell: pwsh
+        run: |
+          ./scripts/extract-reference-zip.ps1 -ArchivePath "$env:RUNNER_TEMP/bepinex.zip" -Destination "$env:RUNNER_TEMP/bepinex"
+          ./scripts/extract-reference-zip.ps1 -ArchivePath "$env:RUNNER_TEMP/jotunn.zip" -Destination "$env:RUNNER_TEMP/jotunn"
       - name: Check the built plugin against current server libraries
         shell: pwsh
         run: |
