@@ -1,0 +1,246 @@
+You are a Blender-capable character animator and technical artist working on the
+Valheim mod Bonehilda, by Swiftfingers.
+
+Repository: https://github.com/jps60/bonehilda
+Baseline when this brief was written: 0.4.28. Inspect the actual checkout first.
+
+TASK AND BOUNDARY
+
+Create an animation asset PR for expanded dusting and rug sweeping. Provide
+editable Blender source, usable exports, contact/clearance metadata, a repeatable
+export process, and review previews. The user will review and may merge the PR.
+Do not merge it, publish a mod release, or activate new AI behaviors as part of
+this art task. The runtime work is recorded separately in TODO.md and is gated
+on the user merging this animation PR.
+
+Read AGENTS.md and docs/DEVELOPMENT.md. Follow project delivery instructions if
+asked for a game build. Never stop the user's Valheim or r2modman, never launch
+a second Valheim beside their running game, and isolate any permitted probes
+with private saves/plugins and preserved graphics preferences. Use Swiftfingers
+as the author. Do not start additional agents unless explicitly authorized.
+
+SOURCE TO INSPECT
+
+- assets/models/Bonehilda.blend:
+  existing scenes include Garment fitting, Feather duster workshop, and Coffin
+  workshop. Inspect the actual rig, bone names, bind transforms, garments, prop
+  geometry and any actions instead of guessing a generic skeleton.
+- scripts/export-models.py and src/Bonehilda/ModelArt.cs:
+  the current BHM1 pipeline exports meshes/skin data, palettes and icons. It does
+  NOT provide an animation clip importer/player. Blender actions or an FBX alone
+  will not become playable in this BepInEx plugin automatically.
+- src/Bonehilda/WorkAnimations.cs and DressVisuals.cs:
+  the native player controller is retargeted onto Skeleton_Friendly's humanoid
+  avatar. Preserve the current rig and clothing binding. The base animator is
+  scaled by 1.04, then native tier scaling applies (1.00 / 1.10 / 1.20). Check the
+  runtime transforms and all three tiers; do not double-apply that scale.
+- src/Bonehilda/Housekeeping.cs and DustingSurface.cs:
+  current eligibility covers unused storage containers, crafting stations,
+  supported chairs, item stands and piece_table-prefixed tables. Her coffin is
+  excluded. The current stroke solver requires upward-facing surfaces and does
+  not provide genuine vertical-face dusting or shape-aware displayed-item work.
+- src/Bonehilda/FeatherDuster.cs, DustingRoutine.cs, DustingStance.cs,
+  DusterGrip.cs, DusterPlume.cs, FeatherDust.cs:
+  current motion is procedural, with post-animation bone posing and restoration,
+  planted-foot weight shifts, a fitted right-hand grip, flexible feather contact,
+  and three existing top-surface patterns. Working stroke time is currently
+  2.90 seconds, plus entry/exit blending. New durations can be metadata-driven.
+- src/Bonehilda/IdleActivities.cs, IdleDeck.cs and Plugin.cs:
+  Dust is one idle-deck category, not a separate card per target or per animation.
+  Chaining currently uses DustingChainRadius = 10 m from the maid, bounded by her
+  idle/work area, and SittingContinueChance = 0.8 for continuing a dusting run.
+  Default idle roaming follows the full 30 m work radius from her coffin.
+- src/Bonehilda/TrophyVisits.cs:
+  contains native item-stand attachment/visual lookups; account for versioned APIs
+  rather than assuming a name-string return for every installed Valheim version.
+
+Existing gameplay and motion references are in assets/models/Valheim-*.png,
+Valheim-dusting*.mp4/.gif, and Valheim-furniture-dusting.mp4/.gif. These are
+development references, not proof that all proposed targets already work.
+
+REQUESTED TARGETS
+
+Keep the current furniture dusting. Design the new motion coverage for:
+
+1. Vertical/wall-mounted item stands, especially at chest height and just above
+   the maid's head.
+2. Horizontal item stands, including displayed items at a few different heights.
+3. Armor stands, empty and equipped.
+4. Pots.
+5. Lava lamps.
+6. "Aveskin skeletons" -- this is the user's wording. Verify the intended
+   buildable/decorative skeleton and its exact prefab(s), including whether it
+   is vanilla or supplied by a mod. Do not silently substitute a generic human
+   skeleton or a living creature. An Asksvin-related spelling is only a possible
+   lookup lead, not a confirmed mapping.
+7. Wards.
+8. Adornments.
+9. Treasure chests, in addition to ordinary storage containers.
+10. Crystal walls specifically; do not generalize this request to every wall.
+11. Rugs, swept with the existing Kvastur model as described below.
+
+Resolve display names to actual prefabs and visible models in the installed
+game/mod set. The broad labels above are not verified prefab IDs. Record each
+verified mapping and its source mod/version. If a requested asset is unavailable,
+list it as unresolved with a clearly labeled size/shape proxy for authoring;
+do not claim that category was validated against its actual model. Optional
+modded targets must not introduce mandatory dependencies for everyone else.
+Keep the current player-placed-piece, range, ward-permission and reservation
+rules when defining target coverage.
+
+ITEM-STAND DUSTING: SIMPLE, VARIED AND SHAPE-AWARE
+
+The user wants 3-5 distinct, reusable dusting variations for stands at a few
+heights. Select/adapt the motion using the outer limits of the DISPLAYED ITEM's
+model, not merely the stand's wooden support or mounting board. A mounted sword
+should guide the contact path; it is not enough to brush an unrelated stand edge.
+
+Interpret this as 3-5 small motion families adaptable across orientation and
+height, rather than a unique clip for every item or dozens of near-identical
+clips. Four families are a reasonable initial target: lengthwise sweeps for
+elongated shapes, broad arcs for wide faces, short contour strokes for irregular
+shapes, and small detail/flick strokes. Choose better families if the geometry
+suggests them. Report the actual baked clip count and adaptation scheme.
+
+Cover horizontal and vertical presentation, with low/tabletop, chest-level and
+just-overhead contact bands relative to the actor's body. Explicitly demonstrate
+both chest-height and just-overhead wall mounts. Avoid fixed world heights that
+fit only the zero-star maid. Prefer parameterized contact targets/IK or reusable
+offsets where feasible; keep individual motions simple and readable.
+
+Use projected visible-model bounds or a conservative silhouette/coarse hull to
+choose a style and outer stroke limits. Include attachment rotation and scale.
+Bounds alone are not evidence of a safe contact path: check exposed surfaces and
+avoid routing the hand/shaft through the bounding-box center of a hollow pot,
+shield, sword guard, trophy, or armor display. Exclude mounting walls, hidden
+LODs, helper geometry and unrelated VFX from the displayed item's shape bounds.
+
+Show representative long/narrow, broad/flat, irregular and bulky objects (for
+example a sword, shield, trophy and helmet/armor) on both stand orientations.
+Vary their sizes and rotations. Provide a safe empty-stand case or mark it as a
+skip. For armor stands, use equipped visible bounds/pose, not just the bare stand.
+
+The goal is reduced obvious clipping, not expensive exact collision simulation.
+Slight feather compression/overlap is acceptable. The handle, hand, forearm and
+broom shaft should not sweep deeply through solid objects, the wall, her skull,
+the apron, or her legs. Prefer backing off, shortening a stroke, changing the
+stance, selecting another variation or skipping an unsafe target. Do not stretch
+the arm or produce exaggerated jumps to reach an unsuitable mount.
+
+OTHER DUSTABLE OBJECTS
+
+Provide usable surface/contact examples for the requested pots, lava lamps,
+skeleton decorations, wards, adornments, treasure chests and crystal walls.
+Reuse the same families where they fit. Dust exposed outer faces/rims instead of
+passing through contents or hollow interiors. Crystal walls need a reachable
+exposed vertical face and a clear stance on that side. Keep the maid's existing
+coffin exclusion. Chests must remain closed/not in use for cosmetic cleaning.
+
+These are cosmetic chores: do not remove/equip/display items, activate wards or
+lamps, open containers, loot treasure, change ownership/ward permissions, damage
+pieces, or add a cleanliness/buff system. Runtime eligibility and pathfinding
+will be integrated after the PR merge, not enabled by this art deliverable.
+
+RUG SWEEPING WITH KVASTUR
+
+Use the user's requested Kvastur MODEL. Verify the exact native prefab/model and
+its proportions; do not silently replace it with a newly invented generic broom.
+Use the game asset as a local/private authoring reference and a runtime-resolved
+visual. Do not instantiate its gameplay/flight/ride behavior or add a real tool
+to the maid's inventory. Document the intended visual attachment and hand grips.
+
+Author a gentle two-handed or otherwise convincing rug-sweeping routine with
+equip/settle, repeatable sweep strokes, and a natural exit. Keep the bristle head
+near the rug's visible plane, within its footprint, and out of nearby furniture.
+Preserve the Kvastur model's physical size when parenting to the scaled rig;
+previous tool scaling mistakes produced a giant wooden beam. Avoid foot sliding,
+sharp body snaps and unnecessary whole-body motion. Show small and large rugs,
+different orientations, and a rug with furniture partially covering it. Where no
+safe sweep patch remains, the runtime should skip it rather than clip through
+chairs or sweep the floor beside it while claiming to clean the rug.
+
+Sweeping belongs to the EXISTING Dust idle category and the same dusting run.
+Do not propose a fifth idle-deck category or a separate scheduling timer. After a
+successful dust or sweep, continuation may choose either another dust target or
+a rug within the shared chain radius. Keep the existing 80% continuation roll
+and 10 m search radius unless the user separately changes them. A gentle preference
+for keeping the current tool for nearby compatible targets is acceptable, but
+must not prevent mixed runs or starve either activity. Supply/repair work and
+the existing higher-priority behaviors must interrupt cosmetics promptly.
+
+RIG, COORDINATES, EXPORT AND RUNTIME CONTRACT
+
+- Preserve bone names, hierarchy, bind/rest pose, garment weights, existing
+  coffins and current motions. Create a dedicated animation-authoring blend if
+  that avoids destructive edits to the existing workshop file. Use relative
+  library links or reproducible scripts, not workstation-specific absolute paths.
+- Treat the existing runtime skeleton/avatar as authoritative. Do not introduce
+  a second replacement player/skeleton rig or rebuild the clothing unnecessarily.
+- Keep world locomotion/root motion out of these clips; the AI owns navigation.
+  Use planted feet and modest weight shifts. Include both hand grips, the tool
+  socket and body clearance, not only a free-floating duster-tip trajectory.
+- Confirm the existing conversion in export-models.py: Blender +Z up/-Y forward
+  maps through unity(v) = (-v.x, v.z, -v.y). State units, handedness, origin,
+  quaternion order and whether tracks are rest-relative or absolute local poses.
+  Validate the mapping instead of applying an additional guessed 90-degree turn.
+- Deliver a runtime-consumable animation export plus its schema/exporter. Since
+  BHM1 is mesh-only, propose and document a small versioned clip/contact format,
+  such as sampled named-bone local transforms and prop/contact curves in JSON.
+  Alternatively provide importable clips with a concrete Unity conversion path
+  and required editor version/tools. Do not assume raw FBX loads in this plugin.
+- Keep runtime integration minimal and separate. Include a demonstrator or
+  loader outline sufficient to verify the export, not an unrequested AI rewrite.
+- For each motion provide a stable clip/variant ID; orientation, height and shape
+  suitability; source action/frame range; sample rate; duration; loop/contact
+  phases; in/out blend times; relevant bones and prop/grip transforms; actor-local
+  and target-local contact frames/normals; approach/standing offset; practical
+  reach and clearance envelope; and a skip/fallback condition.
+- Use a consistent documented sample rate (30 fps is a reasonable starting point)
+  with quaternion continuity and all necessary constraints baked for export.
+- Make contact geometry target-local so it adapts to rotation/scale and all three
+  maid tiers. Document how native item changes or removed targets should cancel
+  or replan the chore rather than continue the old stroke through new geometry.
+- The future owner chooses the variant and publishes start time/target/contact
+  data. Every viewer should derive the same phase from network time; do not rely
+  on independent per-client random animation choices. Current dust keys include
+  BH_dustStart, BH_dustSurface, BH_dustSide, BH_dustFar and BH_dustPattern. Document
+  the proposed additions without silently changing their semantics or saves.
+- Define how poses, IK/grips, tools and any foot offsets reset on interruption,
+  death, dismissal, ownership handoff and unload. Hands must be free to draw the
+  hammer or supply an item immediately afterward. Keep actual work/door priorities.
+- Preserve the current matte outfit/duster materials and avoid reintroducing
+  pale-surface flicker. Do not modify shared native materials globally.
+
+DELIVERABLES AND REVIEW
+
+Submit one reviewable animation-focused PR containing:
+
+1. Editable Blender source/actions and any original helper rig/proxy geometry.
+2. Reproducible export script/command, versioned export schema and baked runtime
+   data (or a fully specified clip import/build route), with a short manifest of
+   IDs, durations, targets, heights, orientations, shape limits and tool bindings.
+3. A verified asset mapping table; keep unresolved names explicit. Include the
+   requested "aveskin skeletons" and Kvastur lookups even if access is missing.
+4. Compact MP4/GIF previews plus clear PNG review frames. Show front/side/oblique
+   views, all three tiers, both stand orientations, the required chest/overhead
+   heights, varied displayed shapes, rug sizes, and interruption/return-to-idle.
+   Overlays for bounds, contact normals, grip points and clearance are useful.
+5. An acceptance/coverage matrix, validation results, known clipping compromises,
+   and exact remaining runtime work mapped to TODO.md. Mark untested combinations
+   and proxy-only previews honestly; a Blender render is not a native-game test.
+6. A concise PR description explaining the assets, export workflow, coverage,
+   unresolved prefab mappings, and what the user can review before merging.
+
+Keep native game meshes, textures, sounds and extracted models out of the PR and
+release. Resolve them from the user's installed game at runtime; keep any local
+extracted authoring references private/ignored. Use original helper proxies if
+the editable action source must be self-contained. Do not pack native assets
+into the .blend inadvertently. Credit original work and retain the project's
+license/AI disclosure conventions. Exclude caches/autosaves and huge disposable
+renders. Do not mark future eligibility, rug scheduling, network playback or
+native validation complete merely because the animation assets exist.
+
+The user values natural Sims-like domestic routines and a duster that generally
+stays outside solid objects over elaborate choreography or perfect collision
+simulation. Deliver a small coherent set with clear geometry contracts that the
+runtime agent can integrate after the user merges the PR.

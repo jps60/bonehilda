@@ -2,6 +2,8 @@
 
 # Bonehilda implementation guide
 
+Future animation assets and their conditional runtime integration are tracked in [TODO.md](../TODO.md). The copyable Blender-agent prompt is [housekeeping-animation-handoff.prompt.txt](housekeeping-animation-handoff.prompt.txt). These targets and rug sweeping are deferred until the user merges the animation PR; they are not current release features.
+
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
 **Version 0.4.28.** This guide records implementation details and developer test scenarios. Use the [public README](../README.md) for installation and the [server matrix](SERVER.md) for current validation status. Historical local probes do not establish dedicated-server compatibility.
