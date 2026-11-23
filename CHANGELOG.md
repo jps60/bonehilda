@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.30
+
+- Allow joining servers without Bonehilda while leaving the mod enabled. Suppress coffin build-menu entries (including no-cost mode), veto coffin placement, and pause maid/coffin gameplay on unsupported servers.
+- Show "Bonehilda is not supported on this server." once after login, using Valheim's fading center message.
+- Restore availability in local and supported worlds without restarting. Keep exact-version mismatch rejection and require every client to have the mod on supported servers.
+- Add isolated native compatibility and session-transition regression checks.
+
 ## 0.4.29
 
 - Plan complete routes through up to two closed doors, considering entrances near both ends of the trip. Bent routes no longer fail because their destination lies on the starting side of a door's plane.

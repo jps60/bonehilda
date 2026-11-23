@@ -102,7 +102,7 @@ public sealed class Maid : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (retiring || !View || !View.IsValid() || !View.IsOwner()) { ledges.Reset(); return; }
+        if (!SessionSupport.Active || retiring || !View || !View.IsValid() || !View.IsOwner()) { ledges.Reset(); return; }
         ledges.FixedTick(this, Time.fixedDeltaTime);
     }
 
@@ -165,6 +165,7 @@ public sealed class Maid : MonoBehaviour
 
     private void ToggleReturn(long sender, ZDOID playerId)
     {
+        if (!SessionSupport.Active) return;
         if (!View.IsValid() || !View.IsOwner() || character.IsDead() || Time.time - lastPetRequest < 0.5f) return;
         var playerObject = ZNetScene.instance.FindInstance(playerId);
         var player = playerObject ? playerObject.GetComponent<Player>() : null;
@@ -245,7 +246,7 @@ public sealed class Maid : MonoBehaviour
 
     private void Update()
     {
-        if (retiring || !View || !View.IsValid() || !View.IsOwner() || character.IsDead())
+        if (!SessionSupport.Active || retiring || !View || !View.IsValid() || !View.IsOwner() || character.IsDead())
         {
             StopNavigation();
             SetCoffinPassage(null);

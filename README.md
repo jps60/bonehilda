@@ -2,7 +2,7 @@
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.29 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.30 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
 ![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/main/assets/icon.png)
 
@@ -33,7 +33,7 @@ Open the coffin and leave matching materials inside. She uses **her own coffin's
 
 ## Install
 
-Requires **BepInExPack_Valheim 5.4.2360** and **Jötunn 2.30.2 or newer**. Install the same Bonehilda version and dependencies on **every client and the server**. Vanilla clients cannot join a Bonehilda server.
+Requires **BepInExPack_Valheim 5.4.2360** and **Jötunn 2.30.2 or newer**. For a Bonehilda world, install the same version and dependencies on **every client and the server**. Vanilla clients cannot join a Bonehilda server. You can join servers without Bonehilda while leaving the mod enabled: her build pieces and gameplay are disabled for that session, with a brief fading login notice. A different installed server version still blocks joining with a mismatch message. Normal behavior returns in local or supported worlds without relaunching.
 
 Download [the latest release ZIP](https://github.com/jps60/bonehilda/releases/latest). In r2modman, choose **Settings → Import local mod**, select the ZIP, and launch the profile with the mod enabled. For a manual installation, extract its `BepInEx` folder into the game/server directory after installing the dependencies. Restart the game/server after updating. Do not install development reference DLLs from a build folder.
 
@@ -47,7 +47,7 @@ Work occurs only where Valheim loads the relevant objects. Bonehilda does not ke
 
 Back up worlds before installing or updating. Keep the mod installed while the world contains its coffins or maids. To uninstall, dismiss every maid, empty and dismantle every coffin in all explored locations, save, then remove the mod from server and clients together. Loading and saving a world without its custom-prefab mod can lose those objects.
 
-Saved-base navigation and release checks are recorded in [0.4.29 validation](https://github.com/jps60/bonehilda/blob/main/docs/validation-0.4.29.md).
+Saved-base navigation checks are recorded in [0.4.29 validation](https://github.com/jps60/bonehilda/blob/main/docs/validation-0.4.29.md); session compatibility and login-notice checks are in [0.4.30 validation](https://github.com/jps60/bonehilda/blob/main/docs/validation-0.4.30.md).
 
 ## Help and development
 

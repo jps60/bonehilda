@@ -50,7 +50,7 @@ internal static class AnyDressRequirements
     private static void Prefix(Player __instance, Piece __0, Player.RequirementMode __1, out Scope? __state)
     {
         __state = null;
-        if (!AnyDressCost.IsCoffin(__0)) return;
+        if (!SessionSupport.Active || !AnyDressCost.IsCoffin(__0)) return;
         ItemDrop? dress;
         if (__1 == Player.RequirementMode.IsKnown)
             dress = Enumerable.Range(1, 10).Select(n => AnyDressCost.Prefab("ArmorDress" + n))
@@ -66,7 +66,10 @@ internal static class AnyDressRequirements
         // still lets native station/DLC checks run without accepting worn dresses.
         __0.m_resources = AnyDressCost.Replace(__state.Original, dress);
     }
-    private static void Postfix(ref bool __result, Scope? __state) { if (__state != null && !__state.Eligible) __result = false; }
+    private static void Postfix(Piece __0, ref bool __result, Scope? __state)
+    {
+        if (!SessionSupport.Active && AnyDressCost.IsCoffin(__0) || __state != null && !__state.Eligible) __result = false;
+    }
     private static Exception? Finalizer(Exception? __exception, Scope? __state)
     {
         if (__state != null && __state.Piece) __state.Piece.m_resources = __state.Original;
@@ -81,6 +84,7 @@ internal static class AnyDressPlacement
     {
         __state = AnyDressCost.Current;
         if (!AnyDressCost.IsCoffin(__0)) return true;
+        if (!SessionSupport.Active) { __result = false; return false; }
         var dress = AnyDressCost.Select(__instance);
         var free = AnyDressCost.Free(__instance, __0);
         if (!free && dress == null) { __result = false; return false; }

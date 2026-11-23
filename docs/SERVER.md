@@ -1,6 +1,6 @@
 # Server installation and compatibility
 
-Bonehilda uses Jötunn's `EveryoneMustHaveMod` compatibility rule with **Patch** strictness: all three version components must match. Install it and its dependencies on the dedicated server and every connecting client. It is not a client-only mod. [Jötunn compatibility documentation](https://valheim-modding.github.io/Jotunn/tutorials/networkcompatibility.html).
+Bonehilda uses Jötunn's `ClientMustHaveMod` compatibility rule with **Patch** strictness: all three version components must match when installed on both sides. Install it and its dependencies on a supported dedicated server and every connecting client. Clients may also join servers without Bonehilda, including servers without Jötunn: her gameplay and coffin build pieces remain unavailable for that session, and a brief login notification fades automatically. Returning to local play or a supported server restores availability without restarting. Installed version mismatches still reject the connection with a mismatch message. Bonehilda functionality requires server support. [Jötunn compatibility documentation](https://valheim-modding.github.io/Jotunn/tutorials/networkcompatibility.html).
 
 ## Install and configure
 

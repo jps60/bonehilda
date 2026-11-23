@@ -15,11 +15,11 @@ namespace Bonehilda;
 [BepInPlugin(Guid, "Bonehilda", Version)]
 [BepInDependency(Jotunn.Main.ModGuid, "2.30.2")]
 // Releases currently increment the patch component even when saved/network data changes.
-[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Patch)]
+[NetworkCompatibility(CompatibilityLevel.ClientMustHaveMod, VersionStrictness.Patch)]
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.29";
+    public const string Version = "0.4.30";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -108,6 +108,7 @@ public sealed class Plugin : BaseUnityPlugin
         DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);
         ActivityLogging = Config.Bind("Debugging", "ActivityLogging", false, "Write loaded maid activity, target, path, and cargo snapshots every two seconds to Bonehilda.activity.json and a bounded history log. Local diagnostics only.");
         gameObject.AddComponent<ActivityDiagnostics>();
+        gameObject.AddComponent<SessionNotice>();
         CommandManager.Instance.AddConsoleCommand(new ActivityCommand());
         harmony = new Harmony(Guid);
         harmony.PatchAll();

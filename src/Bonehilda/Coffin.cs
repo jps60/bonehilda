@@ -46,6 +46,7 @@ public sealed class Coffin : MonoBehaviour
 
     private void Update()
     {
+        if (!SessionSupport.Active) return;
         CheckMaid();
         AnimateDoor();
     }
@@ -208,6 +209,7 @@ internal static class Network
 
     private static void Check(long sender, ZDOID holderId, ZDOID linkedId)
     {
+        if (!SessionSupport.Active) return;
         if (!ZNet.instance.IsServer()) return;
         var holder = ZDOMan.instance.GetZDO(holderId);
         if (holder == null || holder.GetOwner() != sender) return;
@@ -245,6 +247,7 @@ internal static class Network
 
     private static void Missing(long sender, ZDOID holderId, ZDOID linkedId)
     {
+        if (!SessionSupport.Active) return;
         if (sender != ZRoutedRpc.instance.GetServerPeerID()) return;
         var go = ZNetScene.instance.FindInstance(holderId);
         if (!go) return;
