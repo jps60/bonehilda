@@ -15,8 +15,8 @@ internal static class RoutinePolicy
 
     // Critical structure damage first, then depleted fuel/ammo. Ordinary chores
     // alternate in short bouts, instead of one endless repair or supply loop.
-    internal static int WorkPriority(bool supply, bool criticalRepair, bool depleted, bool preferSupplies)
-        => criticalRepair ? 0 : depleted ? 1 : supply == preferSupplies ? 2 : 3;
+    internal static int WorkPriority(bool supply, bool criticalRepair, bool depleted, bool preferSupplies, bool fuel = false)
+        => criticalRepair ? 0 : depleted ? 1 : fuel ? 2 : supply == preferSupplies ? 3 : 4;
 
     internal static bool NextPreference(bool supplied, int streak) => streak >= 3 ? !supplied : supplied;
     internal static float RestScore(float distanceSquared, bool favorite, bool revisit) => favorite && revisit ? distanceSquared * .15f : distanceSquared;

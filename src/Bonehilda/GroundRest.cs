@@ -24,7 +24,8 @@ internal sealed class GroundRest
         var revisit = Plugin.NaturalRoutines.Value && Random.value < .6f;
         // Warmth is a preference; an unobstructed ordinary patch is the fallback.
         foreach (var piece in pieces.Where(p => p && p.IsPlacedByPlayer() && !p.GetComponentInParent<Ship>())
-                     .OrderBy(p => RoutinePolicy.RestScore((p.transform.position - maid.transform.position).sqrMagnitude, IdleRoutine.Favorite(maid, p), revisit)))
+                     .OrderByDescending(p => IdleShelter.Tier(p.transform.position))
+                     .ThenBy(p => RoutinePolicy.RestScore((p.transform.position - maid.transform.position).sqrMagnitude, IdleRoutine.Favorite(maid, p), revisit)))
         {
             var fire = piece.GetComponentInChildren<Fireplace>();
             var fireView = fire ? fire!.GetComponent<ZNetView>() : null;
@@ -45,6 +46,7 @@ internal sealed class GroundRest
     private bool ChooseSpot(Maid maid, Coffin home, Piece anchor, Vector3 center, float radius, float range, bool fire)
     {
         var best = float.PositiveInfinity;
+        var bestShelter = -1;
         var favorite = Plugin.NaturalRoutines.Value && IdleRoutine.Favorite(maid, anchor) && Random.value < .6f;
         for (var i = -1; i < 12; i++)
         {
@@ -59,11 +61,14 @@ internal sealed class GroundRest
             var local = home.transform.InverseTransformPoint(candidate);
             if (Mathf.Abs(local.x) < 1f && local.z > -.3f && local.z < 4f) continue;
             var distance = (candidate - maid.transform.position).sqrMagnitude;
-            if (distance >= best || !Safe(maid, candidate, center) || !maid.CanIdleApproach(home, candidate)) continue;
+            var shelter = IdleShelter.Tier(candidate);
+            if (shelter < bestShelter || shelter == bestShelter && distance >= best
+                || !Safe(maid, candidate, center) || !maid.CanIdleApproach(home, candidate)) continue;
             if (fire && Physics.Linecast(candidate + Vector3.up * .8f, center, out var hit, RepairGeometry.Solids,
                     QueryTriggerInteraction.Ignore) && hit.collider.GetComponentInParent<Piece>() != anchor) continue;
             best = distance; point = candidate; look = center; target = anchor;
-            if (i == -1) break; // A remembered spot still passes every safety/path check.
+            bestShelter = shelter;
+            if (i == -1 && shelter == 2) break;
         }
         deadline = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(maid.transform.position, point), 20f);
         return target;

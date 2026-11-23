@@ -17,9 +17,10 @@ internal sealed class SupplyTarget
     private readonly Func<float> amount;
     private readonly Func<bool> needsItem;
     private readonly Action<ItemDrop.ItemData> add;
+    private readonly Func<float>? capacity, burnSeconds;
 
     private SupplyTarget(Component consumer, SupplyKind kind, ItemDrop resource, Transform? port,
-        Func<float> amount, Func<bool> needsItem, Action<ItemDrop.ItemData> add)
+        Func<float> amount, Func<bool> needsItem, Action<ItemDrop.ItemData> add, Func<float>? capacity = null, Func<float>? burnSeconds = null)
     {
         Consumer = consumer;
         Kind = kind;
@@ -28,9 +29,15 @@ internal sealed class SupplyTarget
         this.amount = amount;
         this.needsItem = needsItem;
         this.add = add;
+        this.capacity = capacity; this.burnSeconds = burnSeconds;
     }
 
     internal bool NeedsItem => Consumer && Resource && needsItem();
+    internal bool Fuel => Kind == SupplyKind.FireplaceFuel || Kind == SupplyKind.MachineFuel || Kind == SupplyKind.ShieldFuel;
+    internal bool LowFuel => Fuel && NeedsItem && FuelPolicy.Start(amount(), capacity?.Invoke() ?? 0f,
+        burnSeconds?.Invoke() ?? 0f, Plugin.FuelLowFraction.Value, Plugin.FuelRunway.Value);
+    internal float FuelFraction => Fuel && capacity != null && capacity() > 0 ? amount() / capacity() : -1f;
+    internal float FuelSeconds => Fuel && burnSeconds != null && burnSeconds() > 0 ? amount() * burnSeconds() : -1f;
     internal bool Depleted => NeedsItem && (Kind == SupplyKind.FireplaceFuel || Kind == SupplyKind.MachineFuel
         || Kind == SupplyKind.ShieldFuel || Kind == SupplyKind.Ammunition) && amount() < 1f;
     internal bool Matches(ItemDrop.ItemData item) => Resource && item.m_dropPrefab &&
@@ -79,7 +86,7 @@ internal sealed class SupplyTarget
             float Amount() => data.GetFloat("fuel", fire.m_startFuel);
             yield return new SupplyTarget(fire, SupplyKind.FireplaceFuel, fire.m_fuelItem, null, Amount,
                 () => fire.m_canRefill && MaintenancePolicy.NeedsFuel(Amount(), fire.m_maxFuel, fire.m_infiniteFuel),
-                _ => Invoke(fire, "RPC_AddFuel", ZNet.GetUID()));
+                _ => Invoke(fire, "RPC_AddFuel", ZNet.GetUID()), () => fire.m_maxFuel, () => fire.m_secPerFuel);
         }
         var machine = piece.GetComponentInChildren<Smelter>(true);
         if (machine)
@@ -90,7 +97,8 @@ internal sealed class SupplyTarget
                 yield return new SupplyTarget(machine, SupplyKind.MachineFuel, machine.m_fuelItem,
                     machine.m_addWoodSwitch ? machine.m_addWoodSwitch.transform : null, Fuel,
                     () => MaintenancePolicy.NeedsFuel(Fuel(), machine.m_maxFuel, false),
-                    _ => Invoke(machine, "RPC_AddFuel", ZNet.GetUID()));
+                    _ => Invoke(machine, "RPC_AddFuel", ZNet.GetUID()), () => machine.m_maxFuel,
+                    () => Queue() > 0 && machine.m_fuelPerProduct > 0 ? machine.m_secPerProduct / machine.m_fuelPerProduct : 0f);
             foreach (var conversion in machine.m_conversion)
             {
                 var resource = conversion.m_from;
@@ -125,7 +133,7 @@ internal sealed class SupplyTarget
                 yield return new SupplyTarget(shield, SupplyKind.ShieldFuel, resource,
                     shield.m_addFuelSwitch ? shield.m_addFuelSwitch.transform : null, Fuel,
                     () => MaintenancePolicy.NeedsFuel(Fuel(), shield.m_maxFuel, false),
-                    _ => Invoke(shield, "RPC_AddFuel", ZNet.GetUID()));
+                    _ => Invoke(shield, "RPC_AddFuel", ZNet.GetUID()), () => shield.m_maxFuel);
             }
         }
         var turret = piece.GetComponentInChildren<Turret>(true);

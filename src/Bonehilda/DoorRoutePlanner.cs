@@ -72,7 +72,7 @@ internal sealed class DoorRoutePlanner
         }
     }
 
-    private static bool Segment(Maid maid, MonsterAI ai, Vector3 from, Vector3 goal, List<Vector3> path)
+    internal static bool Segment(Maid maid, MonsterAI ai, Vector3 from, Vector3 goal, List<Vector3> path)
     {
         path.Clear();
         if (RepairGeometry.ClearWalk(maid.GetComponent<CapsuleCollider>(), from, goal, 4.5f))

@@ -56,13 +56,16 @@ internal static class WorkSounds
         if (native == null || !HasSound(native)) Play(supply!, target.Port ? target.Port!.position : target.Consumer.transform.position, target.Consumer.transform.rotation);
     }
 
-    internal static void Play(EffectList effects, Vector3 position, Quaternion rotation)
+    internal static void Play(EffectList effects, Vector3 position, Quaternion rotation) => Spawn(effects, position, rotation);
+
+    internal static GameObject[] Spawn(EffectList effects, Vector3 position, Quaternion rotation)
     {
         // Current Valheim adds an exclusive-player ZDOID parameter to the reference API.
         var args = CreateEffects.GetParameters().Length == 6
             ? new object[] { position, rotation, null!, 1f, -1, ZDOID.None }
             : new object[] { position, rotation, null!, 1f, -1 };
-        try { CreateEffects.Invoke(effects, args); }
+        try { return (GameObject[])CreateEffects.Invoke(effects, args); }
         catch (System.Exception e) { Plugin.Instance.LogWarning("Could not play work effects: " + e.GetBaseException().Message); }
+        return System.Array.Empty<GameObject>();
     }
 }

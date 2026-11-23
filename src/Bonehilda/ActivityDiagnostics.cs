@@ -44,6 +44,9 @@ internal sealed class MaidActivity
     public string coffinStock = "", lastDeliveredItem = "", lastDeliveryTarget = "";
     public int deliveries;
     public int loadedDoors, doorCandidates, doorRejectedThreshold, doorRejectedApproach;
+    public float fuelFraction = -1, fuelSeconds = -1;
+    public bool fuelRun;
+    public int idleShelterLevel;
 }
 
 internal sealed class ActivityDiagnostics : MonoBehaviour

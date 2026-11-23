@@ -35,6 +35,7 @@ public sealed class Maid : MonoBehaviour
     private readonly List<Piece> pieces = new List<Piece>();
     private readonly Dictionary<ZDOID, float> skipped = new Dictionary<ZDOID, float>();
     private readonly Dictionary<string, float> lastSupplied = new Dictionary<string, float>();
+    private readonly HashSet<string> fuelRuns = new HashSet<string>();
     private Job? job;
     private float nextScan;
     private float repairSearchAfter;
@@ -381,6 +382,7 @@ public sealed class Maid : MonoBehaviour
                     job.Wear ? "repair" : "supply: " + job.Supply!.Kind, work: true))
             {
                 job.Accepted = true;
+                if (job.Supply?.Fuel == true) fuelRuns.Add(SupplyKey(job));
                 jobStarted = Time.time;
                 idle.Cancel(this);
                 StopNavigation();
@@ -492,7 +494,9 @@ public sealed class Maid : MonoBehaviour
     private void PickWander(Coffin home)
     {
         ai.m_randomMoveUpdateTimer = 3f;
-        for (var attempt = 0; attempt < 3; attempt++)
+        var bestShelter = -1;
+        var best = Vector3.zero;
+        for (var attempt = 0; attempt < 8; attempt++)
         {
             var disk = UnityEngine.Random.insideUnitCircle * ai.m_randomMoveRange;
             var candidate = home.transform.position + new Vector3(disk.x, 0, disk.y);
@@ -503,13 +507,17 @@ public sealed class Maid : MonoBehaviour
                     || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, ai.m_randomMoveRange)
                     || !Allowed(point, home.Piece.GetCreator()) || Vector3.Distance(point, transform.position) < 1f
                     || !CanIdleApproach(home, point)) continue;
-                ai.m_randomMoveTarget = point;
-                ai.m_reachedRandomMoveTarget = false;
-                ai.m_randomMoveUpdateTimer = UnityEngine.Random.Range(Plugin.WanderInterval.Value, Plugin.WanderInterval.Value * 1.5f);
-                wanderUntil = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(transform.position, point), 20f);
-                return;
+                var shelter = IdleShelter.Tier(point);
+                if (shelter > bestShelter) { best = point; bestShelter = shelter; }
+                break;
             }
+            if (bestShelter == 2 || !Plugin.PreferShelter.Value && bestShelter >= 0) break;
         }
+        if (bestShelter < 0) return;
+        ai.m_randomMoveTarget = best;
+        ai.m_reachedRandomMoveTarget = false;
+        ai.m_randomMoveUpdateTimer = UnityEngine.Random.Range(Plugin.WanderInterval.Value, Plugin.WanderInterval.Value * 1.5f);
+        wanderUntil = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(transform.position, best), 20f);
     }
 
     private void SetPace(MovementPace value)
@@ -695,6 +703,7 @@ public sealed class Maid : MonoBehaviour
         if (!delivery.Supply.Deliver(item)) return;
         cargo.RemoveItem(item, 1);
         SaveCargo();
+        if (delivery.Supply.Fuel && !delivery.Supply.NeedsItem) fuelRuns.Remove(SupplyKey(delivery));
         View.GetZDO().Set(LastDeliveryKey, ZNet.instance.GetTime().Ticks);
         View.GetZDO().Set("BH_deliveries", View.GetZDO().GetInt("BH_deliveries") + 1);
         View.GetZDO().Set("BH_lastDeliveredItem", Utils.GetPrefabName(delivery.Supply!.Resource.gameObject));
@@ -715,10 +724,11 @@ public sealed class Maid : MonoBehaviour
 
     private int WorkPriority(Job candidate)
     {
-        if (!Plugin.NaturalRoutines.Value) return candidate.Supply != null ? 0 : 1;
+        if (!Plugin.NaturalRoutines.Value) return candidate.Supply?.Fuel == true ? 0 : candidate.Supply != null ? 1 : 2;
         var data = View.GetZDO();
         return RoutinePolicy.WorkPriority(candidate.Supply != null, candidate.Wear && candidate.Wear!.GetHealthPercentage() <= .25f,
-            candidate.Supply?.Depleted == true, RoutinePolicy.NextPreference(data.GetBool("BH_lastWorkSupply", true), data.GetInt("BH_workStreak")));
+            candidate.Supply?.Depleted == true, RoutinePolicy.NextPreference(data.GetBool("BH_lastWorkSupply", true), data.GetInt("BH_workStreak")),
+            candidate.Supply?.Fuel == true);
     }
 
     private Job? FindJob(Coffin home, bool suppliesOnly = false)
@@ -739,9 +749,15 @@ public sealed class Maid : MonoBehaviour
             if (!TaskClaims.Available(this, piece, work: true)) continue;
             var wear = piece.GetComponent<WearNTear>();
             var candidate = new Job { Piece = piece, View = view };
-            candidate.Supply = SupplyTarget.ForPiece(piece)
-                .Where(option => Enabled(option) && option.NeedsItem && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
-                .OrderBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
+            var options = SupplyTarget.ForPiece(piece).ToArray();
+            foreach (var option in options)
+                if (!option.NeedsItem) fuelRuns.Remove(view.GetZDO().m_uid + ":" + option.Kind);
+            candidate.Supply = options
+                .Where(option => Enabled(option) && option.NeedsItem
+                    && (!option.Fuel || HasCargo || option.LowFuel || fuelRuns.Contains(view.GetZDO().m_uid + ":" + option.Kind))
+                    && (HasCargo ? cargo : home.Chest.GetInventory()).GetAllItems().Any(option.Matches))
+                .OrderByDescending(option => option.Depleted).ThenByDescending(option => option.Fuel)
+                .ThenBy(option => lastSupplied.TryGetValue(view.GetZDO().m_uid + ":" + option.Kind, out var time) ? time : float.MinValue)
                 .FirstOrDefault();
             var criticalRepair = Plugin.NaturalRoutines.Value && allowRepairs && !HasCargo && Plugin.Repair.Value
                 && wear && wear.GetHealthPercentage() <= .25f && HasRepairStation(piece);
@@ -771,7 +787,15 @@ public sealed class Maid : MonoBehaviour
         && MaintenancePolicy.InRadius((candidate.Piece.transform.position - home.transform.position).sqrMagnitude, Plugin.Radius.Value)
         && Allowed(candidate.Piece.transform.position, home.Piece.GetCreator())
         && ((candidate.Wear && Plugin.Repair.Value && MaintenancePolicy.NeedsRepair(candidate.Wear!.GetHealthPercentage()) && HasRepairStation(candidate.Piece))
-            || (candidate.Supply != null && Enabled(candidate.Supply) && candidate.Supply.NeedsItem));
+            || (candidate.Supply != null && NeedsSupply(candidate)));
+
+    private bool NeedsSupply(Job candidate)
+    {
+        var target = candidate.Supply!;
+        var needed = target.NeedsItem;
+        if (target.Fuel && !needed) fuelRuns.Remove(SupplyKey(candidate));
+        return Enabled(target) && needed && (!target.Fuel || HasCargo || target.LowFuel || fuelRuns.Contains(SupplyKey(candidate)));
+    }
 
     internal bool HasRepairStation(Piece piece) => HasRepairStation(piece, transform.position);
     internal bool HasRepairStation(Piece piece, Vector3 position) => !piece.m_craftingStation
@@ -1179,6 +1203,7 @@ public sealed class Maid : MonoBehaviour
             stepJumps = data.GetInt("BH_stepJumps"),
             walkSteps = data.GetInt("BH_walkSteps"), smoothStepping = Stepping,
             groundResting = idle.GroundResting,
+            idleShelterLevel = IdleShelter.Tier(transform.position),
             homePosition = data.GetVec3("BH_homePosition", transform.position), actionDelay = Mathf.Max(0, nextAction - Time.time),
             idleDelay = Mathf.Max(0, (float)((data.GetLong(IdleActivities.NextVisitKey) - ZNet.instance.GetTime().Ticks) / (double)TimeSpan.TicksPerSecond)) };
         var homeObject = ZNetScene.instance.FindInstance(data.GetZDOID(HomeKey));
@@ -1189,6 +1214,11 @@ public sealed class Maid : MonoBehaviour
             .Select(item => (item.m_dropPrefab ? Utils.GetPrefabName(item.m_dropPrefab) : item.m_shared.m_name) + " x" + item.m_stack));
         if (job != null && job.Piece)
         {
+            if (job.Supply?.Fuel == true)
+            {
+                state.fuelFraction = job.Supply.FuelFraction; state.fuelSeconds = job.Supply.FuelSeconds;
+                state.fuelRun = fuelRuns.Contains(SupplyKey(job));
+            }
             state.target = Utils.GetPrefabName(job.Piece.gameObject);
             state.targetId = job.View && job.View.IsValid() ? job.View.GetZDO().m_uid.ToString() : "unloaded";
             state.targetPosition = job.Piece.transform.position;
@@ -1235,8 +1265,13 @@ public sealed class Maid : MonoBehaviour
         if (!View.IsOwner()) View.ClaimOwnership();
         if (!View.IsOwner()) return;
         retiring = true;
-        TaskClaims.Release(this);
-        DropCargo();
+        PrepareDeparture();
         ZNetScene.instance.Destroy(gameObject);
+    }
+
+    internal void PrepareDeparture()
+    {
+        if (!View || !View.IsValid() || !View.IsOwner()) return;
+        TaskClaims.Release(this); DropCargo(); SkeletonDeparture.Play(this);
     }
 }

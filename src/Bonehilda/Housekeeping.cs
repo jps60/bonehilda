@@ -23,24 +23,28 @@ internal sealed class Housekeeping
         Performed = false;
         var distance = float.MaxValue;
         var bestRecent = long.MaxValue;
+        var bestShelter = -1;
         foreach (var piece in pieces)
         {
             if (!piece || piece == exclude || (piece.transform.position - maid.transform.position).sqrMagnitude > nearby * nearby
                 || !Eligible(piece, home, ai.m_randomMoveRange) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var d = (piece.transform.position - maid.transform.position).sqrMagnitude + (piece == previous ? 10000f : 0f);
             var recent = TaskClaims.Recent(piece);
-            if (!TaskClaimPolicy.Prefer(recent, d, bestRecent, distance)) continue;
             if (!TrySurface(piece, maid.transform.position, out var candidatePoint)) continue;
             var direction = candidatePoint - maid.transform.position; direction.y = 0;
             if (direction.sqrMagnitude < .01f) direction = maid.transform.forward;
             var standing = candidatePoint - direction.normalized * .95f;
             if (!IdleActivities.Floor(standing, piece.transform.position.y, out standing)
                 || !MaintenancePolicy.InRadius((standing - home.transform.position).sqrMagnitude, ai.m_randomMoveRange)
-                || !Maid.Allowed(standing, home.Piece.GetCreator()) || !maid.CanIdleApproach(home, standing)) continue;
+                || !Maid.Allowed(standing, home.Piece.GetCreator())) continue;
+            var shelter = IdleShelter.Tier(standing);
+            if (shelter < bestShelter || shelter == bestShelter && !TaskClaimPolicy.Prefer(recent, d, bestRecent, distance)
+                || !maid.CanIdleApproach(home, standing)) continue;
             target = piece;
             localPoint = piece.transform.InverseTransformPoint(candidatePoint);
             distance = d;
             bestRecent = recent;
+            bestShelter = shelter;
         }
         if (target == null) previous = null;
         deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, target!.transform.position) : 0f, 16f);

@@ -2,6 +2,10 @@ namespace Bonehilda;
 
 internal static class DoorPolicy
 {
+    internal static bool OutsideSwing(float x, float z, float swingRadius, float bodyRadius) =>
+        x * x + z * z > (swingRadius + bodyRadius + .25f) * (swingRadius + bodyRadius + .25f);
+    internal static bool ReachedSide(float signedDistance, float expectedSide, float bodyRadius) =>
+        signedDistance * expectedSide > bodyRadius + .1f;
     internal static float CrossingDistance(float bodyRadius, float doorHalfDepth) =>
         System.Math.Max(.75f, System.Math.Max(0f, bodyRadius) + System.Math.Max(0f, doorHalfDepth) + .2f);
     internal static bool EnemyNear(float doorDistanceSquared, float maidDistanceSquared, float radius) =>

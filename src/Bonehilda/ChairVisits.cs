@@ -23,6 +23,7 @@ internal sealed class ChairVisits
         chairPerformed = groundActive = false;
         var best = float.PositiveInfinity;
         var bestRecent = long.MaxValue;
+        var bestShelter = -1;
         var range = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);
         var revisit = Plugin.NaturalRoutines.Value && Random.value < .6f;
         foreach (var piece in pieces)
@@ -36,10 +37,12 @@ internal sealed class ChairVisits
             if ((point - home.transform.position).sqrMagnitude > Plugin.Radius.Value * Plugin.Radius.Value) continue;
             var distance = RoutinePolicy.RestScore((point - maid.transform.position).sqrMagnitude, IdleRoutine.Favorite(maid, piece), revisit);
             var recent = TaskClaims.Recent(piece);
-            if (!TaskClaimPolicy.Prefer(recent, distance, bestRecent, best)) continue;
+            var shelter = IdleShelter.Tier(chair.m_attachPoint.position);
+            if (shelter < bestShelter || shelter == bestShelter && !TaskClaimPolicy.Prefer(recent, distance, bestRecent, best)) continue;
             if (!maid.CanIdleApproach(home, point)) continue;
             best = distance; target = chair; approach = point;
             bestRecent = recent;
+            bestShelter = shelter;
         }
         deadline = Time.time + MaintenancePolicy.IdleTravelBudget(Vector3.Distance(maid.transform.position, approach), 20f);
         if (!target) groundActive = ground.TryBegin(maid, home, pieces);

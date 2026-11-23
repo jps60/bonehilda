@@ -2,6 +2,20 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("quarter-capacity trigger refuels slow-burning fixtures", FuelPolicy.Start(2, 10, 3600, .25f, 120)),
+    ("exact quarter capacity alone does not trigger a topoff", !FuelPolicy.Start(2.5f, 10, 3600, .25f, 120)),
+    ("short runway triggers even above quarter capacity", FuelPolicy.Start(8, 10, 10, .25f, 120)),
+    ("exact two-minute runway alone does not trigger", !FuelPolicy.Start(8, 10, 15, .25f, 120)),
+    ("healthy fuel reserves do not start unnecessary topoffs", !FuelPolicy.Start(8, 10, 600, .25f, 120)),
+    ("damage-driven fuel uses capacity rather than invented burn time", !FuelPolicy.Start(8, 10, 0, .25f, 120) && FuelPolicy.Start(2, 10, 0, .25f, 120)),
+    ("full items must fit before a refueling run starts", !FuelPolicy.Start(9.5f, 10, 1, .25f, 120)),
+    ("zero fuel remains urgent with disabled thresholds", FuelPolicy.Start(0, 10, 0, 0, 0)),
+    ("needed fuel outranks ordinary repair even during repair preference", RoutinePolicy.WorkPriority(true, false, false, false, true) < RoutinePolicy.WorkPriority(false, false, false, false)),
+    ("needed fuel outranks processor inputs", RoutinePolicy.WorkPriority(true, false, false, true, true) < RoutinePolicy.WorkPriority(true, false, false, true)),
+    ("close threshold does not prove swing clearance", !DoorPolicy.OutsideSwing(0, .75f, 1.5f, .4f)),
+    ("whole body outside swing is eligible for closing", DoorPolicy.OutsideSwing(0, 2.3f, 1.5f, .4f)),
+    ("wrong-side arrival does not count as crossing", !DoorPolicy.ReachedSide(-1, 1, .4f)),
+    ("standing fully beyond the intended side counts as crossing", DoorPolicy.ReachedSide(1, 1, .4f)),
     ("normal doorway crossing does not require two-meter clear runups", DoorPolicy.CrossingDistance(.4f, .1f) == .75f),
     ("wide but thin gates keep a short threshold crossing", DoorPolicy.CrossingDistance(.4f, .1f) < 1f),
     ("thick doors retain body clearance on both sides", DoorPolicy.CrossingDistance(.5f, .6f) >= 1.29f),

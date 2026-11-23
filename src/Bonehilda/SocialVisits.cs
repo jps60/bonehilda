@@ -18,6 +18,7 @@ internal sealed class SocialVisits
     private bool reacting;
     private string emote = "";
     private float settledAt;
+    private int bestShelter;
     internal bool Performed { get; private set; }
     internal ZNetView? Target => target ? target!.GetComponent<ZNetView>() : null;
     internal string Describe => target ? kind + ": " + target!.name + (reacting ? " greeting" : " approaching") : "none";
@@ -25,6 +26,7 @@ internal sealed class SocialVisits
     internal bool TryBegin(Maid maid, Coffin home)
     {
         target = null; Performed = false; reacting = false; settledAt = 0;
+        bestShelter = -1;
         searchCenter = maid.transform.position;
         if (DangerNear(maid, maid.transform.position)) return false;
         var now = ZNet.instance.GetTime().Ticks;
@@ -66,8 +68,10 @@ internal sealed class SocialVisits
                 || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, Plugin.Radius.Value) || !Maid.Allowed(point, home.Piece.GetCreator())
                 || !SpaceFree(maid, point) || !Visible(point + maid.GetComponent<Character>().GetEyePoint() - maid.transform.position, Aim(candidate))) continue;
             var score = (point - maid.transform.position).sqrMagnitude;
-            if (score >= best || !maid.CanIdleApproach(home, point)) continue;
+            var shelter = IdleShelter.Tier(point);
+            if (shelter < bestShelter || shelter == bestShelter && score >= best || !maid.CanIdleApproach(home, point)) continue;
             best = score; target = candidate; kind = category; standingPoint = point; origin = candidate.transform.position;
+            bestShelter = shelter;
         }
     }
 

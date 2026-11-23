@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.23";
+    public const string Version = "0.4.24";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -29,12 +29,15 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<float> ScanInterval = null!;
     internal static ConfigEntry<float> WorkInterval = null!;
     internal static ConfigEntry<float> SupplyInterval = null!;
+    internal static ConfigEntry<float> FuelLowFraction = null!;
+    internal static ConfigEntry<float> FuelRunway = null!;
     internal static ConfigEntry<float> RespawnDelay = null!;
     internal static ConfigEntry<bool> Repair = null!;
     internal static ConfigEntry<bool> Refuel = null!;
     internal static ConfigEntry<float> JobTimeout = null!;
     internal static ConfigEntry<bool> SupplyMachines = null!;
     internal static ConfigEntry<bool> Wander = null!;
+    internal static ConfigEntry<bool> PreferShelter = null!;
     internal static ConfigEntry<float> WanderRadius = null!;
     internal static ConfigEntry<float> WanderInterval = null!;
     internal static ConfigEntry<float> DustingInterval = null!;
@@ -65,6 +68,8 @@ public sealed class Plugin : BaseUnityPlugin
         ScanInterval = Setting("Work", "ScanInterval", 5f, "Seconds between searches for work.", 1f, 60f);
         WorkInterval = Setting("Work", "ActionInterval", 2f, "Minimum seconds between repairs. She can walk to the next damaged piece with her hammer drawn during this cooldown.", 0.5f, 30f);
         SupplyInterval = Setting("Work", "SupplyInterval", 1f, "Minimum seconds between accepted supply items per maid, across all destinations. Travel and interaction animations can take longer.", 0.5f, 60f);
+        FuelLowFraction = Setting("Work", "FuelLowFraction", .25f, "Start refueling below this fraction of capacity, or below FuelRunwaySeconds. Once started, continue until full. Full items must fit.", 0f, 1f);
+        FuelRunway = Setting("Work", "FuelRunwaySeconds", 120f, "Start refueling below this estimated remaining burn time. Uses native configured burn rate; damage-driven shields use capacity only. 0 disables the time trigger.", 0f, 3600f);
         RespawnDelay = Setting("Maid", "RespawnDelay", 60f, "Seconds before replacing a dead Bonehilda.", 5f, 3600f);
         JobTimeout = Setting("Work", "JobTimeout", 30f, "Skip jobs she cannot reach within this many seconds.", 5f, 120f);
         Repair = Config.Bind("Work", "RepairStructures", true, new ConfigDescription("Repair damaged player-built pieces for free, like a hammer.", null,
@@ -76,6 +81,8 @@ public sealed class Plugin : BaseUnityPlugin
         Wander = Config.Bind("Maid", "IdleWander", true, new ConfigDescription("Free will enabled: wander near the coffin when there are no chores.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         WanderRadius = Setting("Maid", "WanderRadius", 0f, "Idle wandering, dusting, and sitting radius from the coffin. 0 follows the full work radius; a positive value sets a smaller idle area, capped by the work radius.", 0f, 100f);
+        PreferShelter = Config.Bind("Maid", "PreferShelteredIdle", true, new ConfigDescription("Prefer sheltered idle destinations, then roofed spots, with outdoor fallback. Does not restrict real work or expand the idle/work radius.", null,
+            new ConfigurationManagerAttributes { IsAdminOnly = true }));
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
         DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, sitting, or social visits); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
         DustingChainRadius = Setting("Maid", "DustingChainRadius", 10f, "Search distance from the maid for a different piece after each completed dusting action. Limited to her idle/work area; SittingContinueChance controls continuation.", 1f, 50f);

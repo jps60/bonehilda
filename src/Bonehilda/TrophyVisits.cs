@@ -36,6 +36,7 @@ internal sealed class TrophyVisits
         Performed = false;
         var best = float.PositiveInfinity;
         var bestRecent = long.MaxValue;
+        var bestShelter = -1;
         var previous = maid.View.GetZDO().GetZDOID("BH_lastTrophy");
         foreach (var piece in pieces)
         {
@@ -57,10 +58,12 @@ internal sealed class TrophyVisits
             var view = piece.GetComponent<ZNetView>();
             if (view && view.IsValid() && view.GetZDO().m_uid == previous) score += 10000f;
             var recent = TaskClaims.Recent(piece);
-            if (!TaskClaimPolicy.Prefer(recent, score, bestRecent, best)) continue;
+            var shelter = IdleShelter.Tier(point);
+            if (shelter < bestShelter || shelter == bestShelter && !TaskClaimPolicy.Prefer(recent, score, bestRecent, best)) continue;
             if (!maid.CanIdleApproach(home, point)) continue;
             best = score; target = stand; item = name; standingPoint = point;
             bestRecent = recent;
+            bestShelter = shelter;
         }
         deadline = Time.time + MaintenancePolicy.IdleTravelBudget(target ? Vector3.Distance(maid.transform.position, standingPoint) : 0f, 30f);
         reacting = false;
