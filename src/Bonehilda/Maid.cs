@@ -1008,9 +1008,8 @@ public sealed class Maid : MonoBehaviour
     internal bool WithinSupplyReach(Piece piece, Vector3 point, Vector3 feet, float margin = 0)
     {
         var eye = feet + character.GetEyePoint() - transform.position;
-        if (!MaintenancePolicy.InRepairReach((point - eye).sqrMagnitude, Plugin.InteractionReach - margin)) return false;
-        return !Physics.Linecast(eye, point, out var hit, RepairGeometry.SightMask, QueryTriggerInteraction.Ignore)
-            || hit.collider.GetComponentInParent<Piece>() == piece;
+        var port = job != null && job.Piece == piece ? job.Supply?.Port : null;
+        return SupplyInteraction.Visible(piece, port, transform, eye, Plugin.InteractionReach - margin);
     }
 
     private void PickUpSupply(Coffin home, SupplyTarget supply)

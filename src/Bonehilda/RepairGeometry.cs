@@ -27,7 +27,7 @@ internal static class RepairGeometry
         return false;
     }
 
-    private static IEnumerable<Vector3> Probes(Collider collider, Vector3 eye)
+    internal static IEnumerable<Vector3> Probes(Collider collider, Vector3 eye)
     {
         var bounds = collider.bounds;
         yield return collider is MeshCollider mesh && !mesh.convex ? bounds.ClosestPoint(eye) : collider.ClosestPoint(eye);
