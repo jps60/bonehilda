@@ -18,7 +18,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.20";
+    public const string Version = "0.4.21";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -38,6 +38,7 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<float> WanderRadius = null!;
     internal static ConfigEntry<float> WanderInterval = null!;
     internal static ConfigEntry<float> DustingInterval = null!;
+    internal static ConfigEntry<float> DustingChainRadius = null!;
     internal static ConfigEntry<float> StuckTime = null!;
     internal static ConfigEntry<bool> TrophyReactions = null!;
     internal static ConfigEntry<float> TrophyDistance = null!;
@@ -77,6 +78,7 @@ public sealed class Plugin : BaseUnityPlugin
         WanderRadius = Setting("Maid", "WanderRadius", 0f, "Idle wandering, dusting, and sitting radius from the coffin. 0 follows the full work radius; a positive value sets a smaller idle area, capped by the work radius.", 0f, 100f);
         WanderInterval = Setting("Maid", "WanderInterval", 12f, "Minimum seconds between idle destinations; actual interval varies up to 50% longer. Does not slow real work.", 5f, 120f);
         DustingInterval = Setting("Maid", "DustingInterval", 8f, "Seconds between performed idle activities (dusting, trophies, sitting, or social visits); varies up to 50% longer. Failed approaches retry after 3-4.5 seconds. Real jobs take priority.", 3f, 600f);
+        DustingChainRadius = Setting("Maid", "DustingChainRadius", 10f, "Search distance from the maid for a different piece after each completed dusting action. Limited to her idle/work area; SittingContinueChance controls continuation.", 1f, 50f);
         StuckTime = Setting("Work", "NavigationStuckTime", 6f, "Seconds of attempted navigation without moving 25 cm before backing away to a safe point and retrying.", 2f, 30f);
         TrophyReactions = Config.Bind("Maid", "TrophyReactions", true, new ConfigDescription("Occasionally visit mounted boss and selected creature trophies within the work radius and perform player emotes.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
@@ -92,7 +94,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         IdleVoiceChance = Setting("Maid", "IdleVoiceChance", .55f, "Chance of a native skeleton vocalization at a social/trophy gesture. Dusting and sitting use lower chances; 0 disables idle voices.", 0f, 1f);
         IdleVoiceCooldown = Setting("Maid", "IdleVoiceCooldown", 12f, "Minimum seconds between animation-linked skeleton noises per maid.", 5f, 120f);
-        SittingContinueChance = Setting("Maid", "SittingContinueChance", .6f, "Probability of continuing to sit at each check. 0.6 means 60% stay, 40% get up.", 0f, .95f);
+        SittingContinueChance = Setting("Maid", "SittingContinueChance", .8f, "Probability of continuing to sit at each check, or chaining dusting to a different eligible piece within DustingChainRadius. 0.8 means 80% continue, 20% stop. Work interrupts both.", 0f, .95f);
         UseDoors = Config.Bind("Maid", "UseDoors", true, new ConfigDescription("Open permitted player-built doors and gates while travelling, then prioritize closing them. Locked and permanently open doors are excluded.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);

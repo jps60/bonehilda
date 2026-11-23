@@ -79,6 +79,13 @@ internal sealed class IdleActivities
             var view = attemptedTarget!;
             if (view && view.IsValid()) blocked[view.GetZDO().m_uid] = Time.time + 60f;
         }
+        if (active == IdleDeck.Dust && performed && IdleDeck.ContinueSitting(Random.value, Plugin.SittingContinueChance.Value))
+        {
+            TaskClaims.Release(maid, idleOnly: true);
+            if (dust.TryBegin(maid, ai, home, pieces, attemptedTarget ? attemptedTarget!.GetComponent<Piece>() : null, Plugin.DustingChainRadius.Value)
+                && Target && TaskClaims.TryClaim(maid, Target!, "idle: " + active, work: false)) return true;
+            Cancel(maid); Schedule(data, true); return false;
+        }
         Cancel(maid);
         return false;
     }

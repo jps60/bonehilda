@@ -28,6 +28,10 @@ internal sealed class MaidActivity
     public string supplyApproach = "", animatorClips = "";
     public Vector3 supplyStandingPoint;
     public int supplyRetries;
+    public string coffinApproach = "", supplyLastFailure = "";
+    public Vector3 coffinStandingPoint;
+    public int coffinRetries;
+    public bool checkingPickupRoute;
     public float interactionReach;
     public bool dustingPose, seated;
     public int stepJumps;

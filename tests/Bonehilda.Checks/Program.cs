@@ -2,6 +2,8 @@ using Bonehilda;
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("80 percent continuation includes rolls below threshold", IdleDeck.ContinueSitting(.7999f, .8f)),
+    ("continuation stops at the exact threshold", !IdleDeck.ContinueSitting(.8f, .8f)),
     ("summoned skeletts are social acquaintances", SocialPolicy.Classify("Skeleton_Friendly(Clone)", false, true, false, false, false, false) == SocialKind.Skeleton),
     ("skelette prefab variants are recognized", SocialPolicy.Classify("Skelette(Clone)", false, true, false, false, false, false) == SocialKind.Skeleton),
     ("wild hostile skeletons are never greeted", SocialPolicy.Classify("Skeleton", false, false, false, true, false, false) == SocialKind.None),
@@ -192,9 +194,25 @@ checks = checks.Concat(ReservationChecks()).ToArray();
 checks = checks.Concat(SnapshotChecks()).ToArray();
 checks = checks.Concat(LinkChecks()).ToArray();
 checks = checks.Concat(ApproachChecks()).ToArray();
+checks = checks.Concat(SupplyFailureChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> SupplyFailureChecks()
+{
+    var history = new SupplyFailures();
+    yield return ("first failed delivery is deferred for a minute", history.Failed("brazier") == 60);
+    yield return ("repeated failure doubles retry delay", history.Failed("brazier") == 120);
+    yield return ("unrelated consumers keep their own cooldown", history.Failed("smelter") == 60);
+    for (var i = 0; i < 20; i++) history.Failed("brazier");
+    yield return ("failed delivery backoff is bounded at ten minutes", history.Failed("brazier") == 600);
+    history.Succeeded("brazier");
+    yield return ("successful delivery clears repeated failure history", history.Failed("brazier") == 60);
+    var destination = new RepairRetries(); var coffin = new RepairRetries();
+    destination.TryAgain(); destination.TryAgain(); coffin.TryAgain(); coffin.Reset();
+    yield return ("coffin recovery cannot replenish destination retry budget", destination.Count == 2 && destination.TryAgain() && !destination.TryAgain());
+}
 
 static IEnumerable<(string Name, bool Passed)> ApproachChecks()
 {

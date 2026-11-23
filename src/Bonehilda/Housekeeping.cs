@@ -16,7 +16,7 @@ internal sealed class Housekeeping
     internal Piece? Target => target;
     internal string Describe => target ? Utils.GetPrefabName(target!.gameObject) + " " + target.transform.position.ToString("F2") + (sweeping ? " dusting" : " approaching") : "none";
 
-    internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces)
+    internal bool TryBegin(Maid maid, MonsterAI ai, Coffin home, List<Piece> pieces, Piece? exclude = null, float nearby = float.PositiveInfinity)
     {
         target = null;
         attempted = false;
@@ -25,7 +25,8 @@ internal sealed class Housekeeping
         var bestRecent = long.MaxValue;
         foreach (var piece in pieces)
         {
-            if (!piece || !Eligible(piece, home, ai.m_randomMoveRange) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
+            if (!piece || piece == exclude || (piece.transform.position - maid.transform.position).sqrMagnitude > nearby * nearby
+                || !Eligible(piece, home, ai.m_randomMoveRange) || !maid.CanIdleVisit(piece) || !TaskClaims.Available(maid, piece, work: false)) continue;
             var d = (piece.transform.position - maid.transform.position).sqrMagnitude + (piece == previous ? 10000f : 0f);
             var recent = TaskClaims.Recent(piece);
             if (!TaskClaimPolicy.Prefer(recent, d, bestRecent, distance)) continue;

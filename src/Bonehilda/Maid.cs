@@ -54,6 +54,10 @@ public sealed class Maid : MonoBehaviour
     private readonly RepairRetries repairRetries = new RepairRetries();
     private readonly RepairApproach repairApproach = new RepairApproach();
     private readonly RepairApproach supplyApproach = new RepairApproach();
+    private readonly RepairApproach coffinApproach = new RepairApproach();
+    private readonly RepairRetries coffinRetries = new RepairRetries();
+    private readonly SupplyFailures supplyFailures = new SupplyFailures();
+    private string supplyLastFailure = "";
     private readonly RepairRetries supplyRetries = new RepairRetries();
     private Piece? supplyApproachTarget;
     private bool repairRouteFailed;
@@ -95,6 +99,7 @@ public sealed class Maid : MonoBehaviour
         internal SupplyTarget? Supply;
         internal ZNetView View = null!;
         internal bool Accepted;
+        internal bool PickupRouteStarted, FailedSupply;
     }
 
     private void Awake()
@@ -329,6 +334,7 @@ public sealed class Maid : MonoBehaviour
         }
         if (job != null && (repairRouteFailed || !Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value))
         {
+            if (job.Supply != null && (repairRouteFailed || Time.time - jobStarted > Plugin.JobTimeout.Value)) job.FailedSupply = true;
             var preserveIdle = !job.Accepted;
             if (!job.Wear || !ContinueRepairs(home)) CancelJob(preserveIdle);
         }
@@ -392,7 +398,8 @@ public sealed class Maid : MonoBehaviour
                     if (!repairRouteFailed && Time.time < repairChainUntil) { ai.StopMoving(); return; }
                     animations.SetHammer(false);
                 }
-                TickIdle(home, delta);
+                if (HasCargo) { idle.Cancel(this); StopNavigation(); ai.StopMoving(); }
+                else TickIdle(home, delta);
                 return;
             }
         }
@@ -406,7 +413,16 @@ public sealed class Maid : MonoBehaviour
         if (job.Supply != null && cargo.GetAllItems().Count == 0)
         {
             var access = WorkPoint(home.Piece);
-            if (WalkTo(access, delta, home.Piece)) PickUpSupply(home, job.Supply);
+            if (WalkTo(access, delta, home.Piece))
+            {
+                // The destination must be reachable from the actual pickup
+                // position, not just from where she first noticed the job.
+                if (!job.PickupRouteStarted) { supplyApproach.Reset(); job.PickupRouteStarted = true; }
+                var destination = job.Supply.Port ? job.Supply.Port!.position : WorkPoint(job.Piece);
+                var route = SupplyRoute(home, job.Piece, destination, out _);
+                if (route == RepairApproach.Result.Ready) PickUpSupply(home, job.Supply);
+                else if (route == RepairApproach.Result.Failed) RetrySupplyApproach();
+            }
             return;
         }
         var port = job.Supply?.Port;
@@ -681,6 +697,7 @@ public sealed class Maid : MonoBehaviour
         View.GetZDO().Set(LastDeliveryKey, ZNet.instance.GetTime().Ticks);
         lastSupplied[SupplyKey(delivery)] = Time.time;
         WorkSounds.Supplied(delivery.Supply);
+        supplyFailures.Succeeded(delivery.View.GetZDO().m_uid.ToString());
         RememberWork(true);
     }
 
@@ -805,18 +822,28 @@ public sealed class Maid : MonoBehaviour
         if (supplyRoute == RepairApproach.Result.Ready)
         {
             var offset = supplyStanding - transform.position; offset.y = 0;
-            Navigate(supplyStanding, dt, .25f, supplyApproach.Direct || offset.magnitude < 1.2f && RepairGeometry.ClearLastStep(this, supplyStanding));
+            Navigate(supplyStanding, dt, .25f, (piece.GetComponent<Coffin>() ? coffinApproach.Direct : supplyApproach.Direct)
+                || offset.magnitude < 1.2f && RepairGeometry.ClearLastStep(this, supplyStanding));
         }
         else
         {
             ai.StopMoving();
-            if (supplyRoute == RepairApproach.Result.Failed) RetrySupplyApproach();
+            if (supplyRoute == RepairApproach.Result.Failed)
+            {
+                if (piece.GetComponent<Coffin>())
+                {
+                    if (!coffinRetries.TryAgain() && job != null) { repairRouteFailed = true; job.FailedSupply = true; }
+                    coffinApproach.Retry();
+                }
+                else RetrySupplyApproach();
+            }
         }
         return false;
     }
 
     private RepairApproach.Result SupplyRoute(Coffin home, Piece piece, Vector3 point, out Vector3 standing)
     {
+        if (piece == home.Piece) return coffinApproach.Tick(this, ai, home, piece, out standing, repairing: false, interaction: point);
         if (supplyApproachTarget != piece)
         {
             supplyApproachTarget = piece; supplyApproach.Reset(); supplyRetries.Reset();
@@ -826,7 +853,8 @@ public sealed class Maid : MonoBehaviour
 
     private void RetrySupplyApproach()
     {
-        if (!supplyRetries.TryAgain() && job != null) repairRouteFailed = true;
+        supplyLastFailure = supplyApproach.State;
+        if (!supplyRetries.TryAgain() && job != null) { repairRouteFailed = true; job.FailedSupply = true; }
         supplyApproach.Retry();
     }
 
@@ -1068,6 +1096,7 @@ public sealed class Maid : MonoBehaviour
         repairRetries.Reset();
         repairApproach.Reset();
         supplyApproach.Reset(); supplyRetries.Reset(); supplyApproachTarget = null;
+        coffinApproach.Reset(); coffinRetries.Reset();
         repairRouteFailed = false;
     }
 
@@ -1094,7 +1123,8 @@ public sealed class Maid : MonoBehaviour
     {
         if (job?.Accepted == true && job.Piece) TaskClaims.Release(this, job.Piece);
         if (job != null && job.View && job.View.IsValid())
-            skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(repairRouteFailed ? 60f : 10f, Plugin.ScanInterval.Value * 2f);
+            skipped[job.View.GetZDO().m_uid] = Time.time + Mathf.Max(job.FailedSupply
+                ? supplyFailures.Failed(job.View.GetZDO().m_uid.ToString()) : repairRouteFailed ? 60f : 10f, Plugin.ScanInterval.Value * 2f);
     }
 
     internal MaidActivity ReadActivity()
@@ -1118,6 +1148,8 @@ public sealed class Maid : MonoBehaviour
             repairRejectedSpace = repairApproach.RejectedSpace, repairRejectedSight = repairApproach.RejectedSight,
             repairRejectedPath = repairApproach.RejectedPath,
             supplyApproach = supplyApproach.State, supplyStandingPoint = supplyApproach.Position, supplyRetries = supplyRetries.Count,
+            coffinApproach = coffinApproach.State, coffinStandingPoint = coffinApproach.Position, coffinRetries = coffinRetries.Count,
+            supplyLastFailure = supplyLastFailure, checkingPickupRoute = job?.PickupRouteStarted == true && !HasCargo,
             interactionReach = Plugin.InteractionReach,
             animatorClips = string.Join(", ", animations.GetComponentInChildren<Animator>().GetCurrentAnimatorClipInfo(0).Select(c => c.clip.name)),
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,
