@@ -42,6 +42,8 @@ public sealed class Maid : MonoBehaviour
     private float nextAction;
     private float standUntil;
     private float jobStarted;
+    private readonly WorkProgress routeProgress = new WorkProgress();
+    private bool JobTimedOut => routeProgress.Expired(Time.time, jobStarted, Plugin.JobTimeout.Value);
     private float repairChainUntil;
     private float nextHomeCheck;
     private bool wasOwner;
@@ -351,9 +353,9 @@ public sealed class Maid : MonoBehaviour
             // A repair can hand off directly to the next damaged piece.
             if (phase != WorkPhase.None) return;
         }
-        if (job != null && (repairRouteFailed || !Valid(job, home) || Time.time - jobStarted > Plugin.JobTimeout.Value))
+        if (job != null && (repairRouteFailed || !Valid(job, home) || JobTimedOut))
         {
-            if (job.Supply != null && (repairRouteFailed || Time.time - jobStarted > Plugin.JobTimeout.Value)) job.FailedSupply = true;
+            if (job.Supply != null && (repairRouteFailed || JobTimedOut)) job.FailedSupply = true;
             var preserveIdle = !job.Accepted;
             if (!job.Wear || !ContinueRepairs(home)) CancelJob(preserveIdle);
         }
@@ -992,6 +994,7 @@ public sealed class Maid : MonoBehaviour
 
     private void RetrySupplyApproach()
     {
+        routeProgress.Reset(Time.time);
         supplyLastFailure = supplyApproach.State;
         if (!supplyRetries.TryAgain() && job != null) { repairRouteFailed = true; job.FailedSupply = true; }
         supplyApproach.Retry();
@@ -1008,6 +1011,16 @@ public sealed class Maid : MonoBehaviour
     {
         navigationGoal = point;
         if (!direct && !recoveringRoute) PrepareDoorPath(point);
+        var completePath = ai.m_path.Count > 0 && (ai.m_lastFindPathTarget - point).sqrMagnitude < .25f
+            && RepairApproachPolicy.EndpointMatches(new Vector2(ai.m_path[ai.m_path.Count - 1].x - point.x,
+                ai.m_path[ai.m_path.Count - 1].z - point.z).sqrMagnitude, ai.m_path[ai.m_path.Count - 1].y - point.y);
+        if (job?.Accepted == true && (direct || completePath))
+        {
+            var remaining = 0f; var previous = transform.position;
+            if (!direct) foreach (var node in ai.m_path) { remaining += Vector3.Distance(previous, node); previous = node; }
+            remaining += Vector3.Distance(previous, point);
+            routeProgress.Observe(remaining, Time.time);
+        }
         var doorBlocked = doors.TryBegin(this, ai, point);
         if (View.GetZDO().GetZDOID("BH_openDoor") != ZDOID.None) return;
         var feet = transform.position;
@@ -1078,7 +1091,8 @@ public sealed class Maid : MonoBehaviour
         if (ai.m_path.Count > 0 && (ai.m_lastFindPathTarget - goal).sqrMagnitude < 1f)
         {
             var end = ai.m_path[ai.m_path.Count - 1] - goal;
-            if (RepairApproachPolicy.EndpointMatches(end.x * end.x + end.z * end.z, end.y)) return;
+            if (RepairApproachPolicy.EndpointMatches(end.x * end.x + end.z * end.z, end.y))
+            { ai.m_lastFindPathTime = Time.time; return; }
         }
         var homeObject = ZNetScene.instance.FindInstance(View.GetZDO().GetZDOID(HomeKey));
         var home = homeObject ? homeObject.GetComponent<Coffin>() : null;
@@ -1200,6 +1214,7 @@ public sealed class Maid : MonoBehaviour
             animations.Interact();
             nextAction = Time.time + 0.55f;
             jobStarted = Time.time; // Give the outbound walk its own timeout after collection.
+            routeProgress.Reset(Time.time);
         }
         else CancelJob();
     }
@@ -1243,6 +1258,7 @@ public sealed class Maid : MonoBehaviour
 
     private void ResetRepairRoute()
     {
+        routeProgress.Reset();
         repairRetries.Reset();
         repairApproach.Reset();
         supplyApproach.Reset(); supplyRetries.Reset(); supplyApproachTarget = null;
@@ -1252,6 +1268,7 @@ public sealed class Maid : MonoBehaviour
 
     private void RetryRepairApproach()
     {
+        routeProgress.Reset(Time.time);
         if (!repairRetries.TryAgain()) repairRouteFailed = true;
         else jobStarted = Time.time;
         repairApproach.Retry();
@@ -1266,12 +1283,14 @@ public sealed class Maid : MonoBehaviour
     internal void DoorApproachFailed()
     {
         if (job?.Accepted == true && job.Wear) repairRouteFailed = true;
-        else if (job?.Accepted == true) jobStarted = Time.time - Plugin.JobTimeout.Value - 1f;
+        else if (job?.Accepted == true) { repairRouteFailed = true; job.FailedSupply = true; }
     }
+
+    internal void DoorTraversalCompleted() => routeProgress.Reset(Time.time);
 
     private void SkipCurrentJob()
     {
-        if (job?.Wear && (repairRouteFailed || Time.time - jobStarted > Plugin.JobTimeout.Value))
+        if (job?.Wear && (repairRouteFailed || JobTimedOut))
         {
             // Failed repairs cannot keep choosing other unreachable repairs
             // indefinitely while a ready machine has matching supplies.

@@ -24,7 +24,7 @@ internal sealed class DustingSurface : IDisposable
         foreach (var filter in piece.GetComponentsInChildren<MeshFilter>())
         {
             var renderer = filter.GetComponent<MeshRenderer>();
-            if (!filter.sharedMesh || !renderer || !renderer.enabled || lowerLods.Contains(renderer)) continue;
+            if (!filter.sharedMesh || !filter.sharedMesh.isReadable || !renderer || !renderer.enabled || lowerLods.Contains(renderer)) continue;
             var probe = new GameObject("BH_DustingSurface") { layer = 2, hideFlags = HideFlags.DontSave };
             probe.transform.SetParent(filter.transform, false);
             var collider = probe.AddComponent<MeshCollider>();

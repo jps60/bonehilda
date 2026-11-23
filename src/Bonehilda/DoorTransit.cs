@@ -275,6 +275,7 @@ internal sealed class DoorTransit
         blocked = false; nextCheck = 0; BlockedReason = "";
         maid.StopNavigation();
         if (failed) maid.DoorApproachFailed();
+        else maid.DoorTraversalCompleted();
     }
 
     internal static bool EnemiesNear(Character maid, Vector3 door, Vector3 feet)

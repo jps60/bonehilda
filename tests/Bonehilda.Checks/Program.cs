@@ -1,7 +1,30 @@
 using Bonehilda;
 
+static bool ProductiveDetour()
+{
+    var progress = new WorkProgress();
+    progress.Observe(80, 0); progress.Observe(60, 25);
+    return !progress.Expired(40, 0, 30) && progress.Expired(56, 0, 30);
+}
+static bool CirclingTimesOut()
+{
+    var progress = new WorkProgress();
+    progress.Observe(20, 0);
+    for (var now = 5; now <= 35; now += 5) progress.Observe(now % 10 == 0 ? 20 : 25, now);
+    return progress.Expired(35, 0, 30);
+}
+static bool NewWalkResetsProgress()
+{
+    var progress = new WorkProgress(); progress.Observe(1, 10);
+    progress.Reset(); progress.Observe(90, 50);
+    return !progress.Expired(75, 40, 30) && progress.Expired(81, 40, 30);
+}
+
 var checks = new (string Name, bool Passed)[]
 {
+    ("long productive detours renew the stall timer", ProductiveDetour()),
+    ("circling without shortening the route still times out", CirclingTimesOut()),
+    ("outbound pickup walk gets a fresh progress baseline", NewWalkResetsProgress()),
     ("stable home identity survives runtime ID changes", HomeIdentityPolicy.HomeMatches("home-guid", "home-guid", 10000)),
     ("foreign home token cannot match merely by position", !HomeIdentityPolicy.HomeMatches("old-guid", "new-guid", 0)),
     ("legacy maids can recover their unique saved home position", HomeIdentityPolicy.HomeMatches("", "", .01f)),

@@ -93,7 +93,14 @@ internal sealed class ChairVisits
     }
 
     private static bool Eligible(Piece piece, Coffin home, float range) => piece && piece.IsPlacedByPlayer()
+        && (!Utils.GetPrefabName(piece.gameObject).StartsWith("piece_bathtub") || RunningTub(piece))
         && !piece.GetComponentInParent<Ship>()
         && (piece.transform.position - home.transform.position).sqrMagnitude <= range * range
         && Maid.Allowed(piece.transform.position, home.Piece.GetCreator());
+
+    private static bool RunningTub(Piece piece)
+    {
+        var fire = piece.GetComponentInChildren<Fireplace>();
+        return fire && fire.IsBurning();
+    }
 }

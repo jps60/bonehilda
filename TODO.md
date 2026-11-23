@@ -1,11 +1,11 @@
 # Next build queue
 
-- [ ] Allow hot-tub sitting only while the tub is running, using its native active/heating state rather than fuel stock alone. Check before sitting and leave if it stops running. This is queued for the next build, independent of the animation PR below.
-- [ ] Investigate multi-level windmill supply preflight using the completed 0.4.28 session findings: seven captured attempt windows were rejected before pickup, not while walking the stairs. The user's route video confirms manual barley acceptance while standing on the upper stair flight. Add a reproducer with a gate, exterior corridor, two stair flights and a 90-degree landing; validate body clearance and input sight/reach at stair-supported stances instead of requiring a flat pad. Probe door thresholds at the door's floor instead of the maid's current floor; prioritize distinct usable input-side floor levels and diversify/densify standing samples on retries. Preserve native interaction reach and physical support.
+- [x] Allow hot-tub sitting only while the native fireplace is burning; leave if it stops.
+- [x] Reproduce the multi-level windmill route in a private saved-base copy. Correct doorway floor sampling, bent/multiple-door routing and progress-based job timeouts without changing native interaction reach. See [0.4.29 validation](docs/validation-0.4.29.md).
 - [ ] Split the generic “no reachable sightline” diagnostic into no suitable floor/standing clearance, blocked input sight/reach, and incomplete walking route. Capture candidate floor/standing points and blocking collider/door/path endpoint so a later session can identify the actual failed segment. Activity labels alone must not be reported as successful deliveries.
 - [ ] Review long supply backoffs after meaningful door/floor/route-context changes. Preserve the three-retry limit and native player fueling reach; add a bounded, supported stair/landing waypoint fallback only if improved candidate selection and doorway probing still fail. Existing logs do not prove the precise landing is blocked.
-- [ ] Test the door planner's global start/goal half-plane filter against routes that exit a house and bend back around it. Keep local doorway crossing validation and close-behind safety; a distant goal's side of the door plane should not rule out a valid detour. The video alone does not establish the actual door-plane signs in this save.
-- [ ] Investigate the 14 unreadable-render-mesh collision errors in the completed session. `DustingSurface` creates temporary MeshColliders from MeshFilters without checking mesh readability and selects its probe list whenever nonempty. Skip unsuitable meshes and fall back to valid existing colliders when no usable visual probe exists; add a native regression case. This is a likely source, not an instrumented attribution of every error.
+- [x] Remove the global door-plane filter that rejected bent routes. Validate complete segments through doorways and retain close-behind safety.
+- [x] Guard temporary dusting probes against unreadable render meshes and retain physical-collider fallback. Attribution of every historical mesh warning remains unverified.
 - [ ] Investigate the session's single `Hud.SetupPieceInfo` IndexOutOfRangeException. Capture the selected piece/item variant and complete patch context; verify any-dress icon handling and the installed UI-mod combination before attributing it to one mod. BetterUI also independently logged missing `PlayerProfile.GetStat` method errors in the menu.
 
 # Deferred animation integration
@@ -73,3 +73,7 @@ Retain existing reachable furniture dusting, player-placed-piece eligibility and
 - [ ] Verify repair/supply preemption, closing doors, cancellation, target replacement, save/reload and ownership handoff. Confirm visual tools never become inventory items or extra death drops.
 - [ ] Follow AGENTS.md for the requested integration build: aligned version/docs, checked `scripts/build.ps1`, Swiftfingers metadata, install the existing profile preserving its state, commit/push, publish the matching ZIP and verify the public hash.
 - [ ] Refresh Thunderstore/Nexus materials and label remaining untested coverage accurately. Do not advertise pending checklist items as implemented solely because an art PR was merged.
+
+# Ideas under consideration
+
+Optional user idea: an upper-body shoo gesture and skeleton noise while walking, encouraging crowded tames to move aside if normal rerouting fails. Consider only if tame crowding remains an issue. No tame-control behavior is included in 0.4.29.

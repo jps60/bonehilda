@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.28";
+    public const string Version = "0.4.29";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -72,7 +72,7 @@ public sealed class Plugin : BaseUnityPlugin
         FuelLowFraction = Setting("Work", "FuelLowFraction", .25f, "Start refueling below this fraction of capacity, or below FuelRunwaySeconds. Once started, continue until full. Full items must fit.", 0f, 1f);
         FuelRunway = Setting("Work", "FuelRunwaySeconds", 120f, "Start refueling below this estimated remaining burn time. Uses native configured burn rate; damage-driven shields use capacity only. 0 disables the time trigger.", 0f, 3600f);
         RespawnDelay = Setting("Maid", "RespawnDelay", 60f, "Seconds before replacing a dead Bonehilda.", 5f, 3600f);
-        JobTimeout = Setting("Work", "JobTimeout", 30f, "Skip jobs she cannot reach within this many seconds.", 5f, 120f);
+        JobTimeout = Setting("Work", "JobTimeout", 30f, "Skip jobs after this many seconds without progress along the walking route. Productive detours can take longer.", 5f, 120f);
         Repair = Config.Bind("Work", "RepairStructures", true, new ConfigDescription("Repair damaged player-built pieces for free, like a hammer.", null,
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         Refuel = Config.Bind("Work", "RefuelStructures", true, new ConfigDescription("Supply fireplaces, torches, hearths, and braziers from the coffin.", null,

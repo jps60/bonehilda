@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.29
+
+- Plan complete routes through up to two closed doors, considering entrances near both ends of the trip. Bent routes no longer fail because their destination lies on the starting side of a door's plane.
+- Sample doorway floors at the doorway's height, compare actual walking lengths, and retain validated routes in the native AI path cache while following them.
+- Treat `JobTimeout` as time without meaningful progress along a complete route, rather than the total duration of a trip. Door crossings and supply collection start a fresh progress baseline; circling still times out.
+- Only select hot-tub seats while their native fire is burning, and leave if it stops.
+- Skip unreadable render meshes when building temporary dusting probes, retaining the physical-collider fallback.
+- Add regression checks for productive detours, stalled circling, and fresh outbound walks. Validate repeated barley deliveries in an isolated copy of an actual saved base.
+
 ## 0.4.28
 
 - All coffin tiers accept one unequipped Hildir dress, across the ten vanilla styles, instead of requiring a tier-specific dress.

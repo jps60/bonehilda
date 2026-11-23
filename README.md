@@ -2,7 +2,7 @@
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.28 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.29 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
 ![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/main/assets/icon.png)
 
@@ -37,7 +37,7 @@ Requires **BepInExPack_Valheim 5.4.2360** and **Jötunn 2.30.2 or newer**. Insta
 
 Download [the latest release ZIP](https://github.com/jps60/bonehilda/releases/latest). In r2modman, choose **Settings → Import local mod**, select the ZIP, and launch the profile with the mod enabled. For a manual installation, extract its `BepInEx` folder into the game/server directory after installing the dependencies. Restart the game/server after updating. Do not install development reference DLLs from a build folder.
 
-The configuration file is `BepInEx/config/com.bonehilda.valheim.cfg`, generated on first launch. Gameplay settings are synchronized by Jötunn from the server; diagnostics remain local. Key options include `Radius`, `SupplyInterval`, `FuelLowFraction`, `FuelRunwaySeconds`, `IdleWander`, `DustingInterval` (all idle activities), `SocialVisits`, and `SittingContinueChance`.
+The configuration file is `BepInEx/config/com.bonehilda.valheim.cfg`, generated on first launch. Gameplay settings are synchronized by Jötunn from the server; diagnostics remain local. Key options include `Radius`, `SupplyInterval`, `FuelLowFraction`, `FuelRunwaySeconds`, `IdleWander`, `DustingInterval` (all idle activities), `SocialVisits`, and `SittingContinueChance`. `Work.JobTimeout` limits time without meaningful progress along a complete walking route; long productive detours can take longer.
 
 ## Compatibility and saves
 
@@ -46,6 +46,8 @@ Static API checks target the installed **Valheim 1.0.21 / Jötunn 2.30.2** libra
 Work occurs only where Valheim loads the relevant objects. Bonehilda does not keep areas loaded or provide offline production. Complex terrain, crowded doors, and obstructed interaction points can cause retries or deferred jobs. Mods that replace skeleton/player animations, inventories, pathfinding, or machine interactions may conflict; build-menu mods may move the coffins.
 
 Back up worlds before installing or updating. Keep the mod installed while the world contains its coffins or maids. To uninstall, dismiss every maid, empty and dismantle every coffin in all explored locations, save, then remove the mod from server and clients together. Loading and saving a world without its custom-prefab mod can lose those objects.
+
+Saved-base navigation and release checks are recorded in [0.4.29 validation](https://github.com/jps60/bonehilda/blob/main/docs/validation-0.4.29.md).
 
 ## Help and development
 
