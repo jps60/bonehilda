@@ -228,11 +228,29 @@ checks = checks.Concat(ReservationChecks()).ToArray();
 checks = checks.Concat(SnapshotChecks()).ToArray();
 checks = checks.Concat(LinkChecks()).ToArray();
 checks = checks.Concat(PersistenceSafetyChecks()).ToArray();
+checks = checks.Concat(DressCostChecks()).ToArray();
 checks = checks.Concat(ApproachChecks()).ToArray();
 checks = checks.Concat(SupplyFailureChecks()).ToArray();
 foreach (var check in checks)
     if (!check.Passed) throw new Exception($"FAILED: {check.Name}");
 Console.WriteLine($"Passed {checks.Length} maintenance policy checks.");
+
+static IEnumerable<(string Name, bool Passed)> DressCostChecks()
+{
+    for (var i = 1; i <= 10; i++)
+    {
+        var name = "ArmorDress" + i;
+        yield return ($"Hildir dress {i} is an accepted alternative", DressCostPolicy.Eligible(name, false, 1));
+        yield return ($"equipped Hildir dress {i} is protected", !DressCostPolicy.Eligible(name, true, 1));
+        yield return ($"paid dress {i} is returned regardless of coffin tier", Enumerable.Range(0, 3).All(tier => DressCostPolicy.Refund(true, name, tier) == name));
+    }
+    foreach (var invalid in new[] { "ArmorDress0", "ArmorDress11", "ArmorDress01", "ArmorDress+1", "ArmorDress1(Clone)", "ArmorTunic1", "HelmetHat1", "Dress", "" })
+        yield return ($"unrelated or malformed dress name is excluded: {invalid}", !DressCostPolicy.IsDress(invalid) && DressCostPolicy.Refund(true, invalid, 0) == "");
+    yield return ("empty dress stacks cannot pay a cost", !DressCostPolicy.Eligible("ArmorDress1", false, 0));
+    yield return ("new free builds do not manufacture a dress refund", Enumerable.Range(0, 3).All(tier => DressCostPolicy.Refund(true, "", tier) == ""));
+    yield return ("legacy coffins retain original tier dress refunds", DressCostPolicy.Refund(false, "", 0) == "ArmorDress10"
+        && DressCostPolicy.Refund(false, "", 1) == "ArmorDress1" && DressCostPolicy.Refund(false, "", 2) == "ArmorDress6");
+}
 
 static IEnumerable<(string Name, bool Passed)> PersistenceSafetyChecks()
 {
@@ -485,12 +503,12 @@ static IEnumerable<(string Name, bool Passed)> IdleChecks()
     yield return ("an elapsed cooldown stays ready", IdleTiming.ClampPending(now, now - 1, 15) < now);
     yield return ("idle polling does not keep postponing a pending visit", IdleTiming.ClampPending(now + TimeSpan.TicksPerSecond, shortened, 15) == shortened);
     yield return ("failed approach cooldown expires before a full activity delay", IdleTiming.Next(now, 15, false, 1) < IdleTiming.Next(now, 15, true, 0));
-    var dresses = new[] { "ArmorDress10", "ArmorDress1", "ArmorDress6" };
+    var dresses = new[] { "ArmorDress10", "ArmorDress10", "ArmorDress10" };
     for (var tier = 0; tier < 3; tier++)
     {
         var recipe = CoffinRecipes.ForTier(tier);
         yield return ($"tier {tier} has exactly one skeleton trophy", recipe.Single(r => r.Item == "TrophySkeleton").Amount == 1);
-        yield return ($"tier {tier} has one progressing Hildir dress", recipe.Count(r => r.Item.StartsWith("ArmorDress")) == 1 && recipe.Single(r => r.Item == dresses[tier]).Amount == 1);
+        yield return ($"tier {tier} has one shared alternative-dress slot", recipe.Count(r => r.Item.StartsWith("ArmorDress")) == 1 && recipe.Single(r => r.Item == dresses[tier]).Amount == 1);
         yield return ($"tier {tier} uses ectoplasm without eitr or wisps", recipe.Single(r => r.Item == "Ectoplasm").Amount == (2 << tier) && !recipe.Any(r => r.Item is "Eitr" or "Wisp" or "YggdrasilWood"));
         yield return ($"tier {tier} fits the recipe UI", recipe.Length <= 6 && recipe.All(r => r.Amount > 0));
     }

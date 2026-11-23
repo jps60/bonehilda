@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.28
+
+- All coffin tiers accept one unequipped Hildir dress, across the ten vanilla styles, instead of requiring a tier-specific dress.
+- Show one "Any dress" cost with quantity 1, the available dress's icon, and a tooltip identifying the next dress to consume. Selection follows inventory row/column order; worn dresses are protected.
+- Consume the selected item instance once, while native building still checks/charges the other materials. A missing selected item rolls back the just-placed coffin before other costs are charged.
+- Save the paid dress type on new coffins for native dismantling refunds. New free builds have no dress refund; legacy coffins keep their previous tier-specific refunds. Refunded dresses follow vanilla resource behavior, without preserving item customization/upgrades.
+- Add 42 dress eligibility/refund checks and an isolated native-asset/UI integration helper. Startup testing confirmed all ten alternatives, equipped-item protection, knowledge-scope restoration, refund requirement substitution, the native cost label and quantity, and the selected icon. A full in-world placement/payment/refund cycle and multiplayer placement remain unverified.
+
 ## 0.4.27
 
 - Validate saved home identity and reciprocal links before a coffin retires a maid, before she works at a loaded home, and before picking up, returning, or delivering supplies. Reused runtime IDs cannot authorize actions at another home.

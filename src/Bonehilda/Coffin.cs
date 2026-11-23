@@ -201,6 +201,7 @@ internal static class Network
     private static void Postfix()
     {
         Confirmation.Clear();
+        AnyDressCost.Reset();
         ZRoutedRpc.instance.Register<ZDOID, ZDOID>(CheckRpc, Check);
         ZRoutedRpc.instance.Register<ZDOID, ZDOID>(MissingRpc, Missing);
     }

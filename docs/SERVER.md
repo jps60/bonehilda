@@ -19,15 +19,16 @@ Only the peer owning a maid runs her work logic. Native Valheim ownership may mi
 
 Wards are checked using the **coffin builder's** permission identity. Opening a coffin pauses its maid's chest transfers. No chores run against unloaded objects; this mod is not an offline simulation or an area loader. A dedicated server does not make a whole world active by itself.
 
-## Validation status for 0.4.27
+## Validation status for 0.4.28
 
 | Environment or check | Status |
 | --- | --- |
-| Release build and Unity-free maintenance policies | Passed: no build warnings; 350 policy checks |
+| Release build and Unity-free maintenance policies | Passed: no build warnings; 392 policy checks |
 | Package structure, metadata, icon, version alignment, archived DLL | Passed; seven malformed-package rejection scenarios also passed |
-| Installed Windows Valheim 1.0.21, Jötunn 2.30.2 API and private adapter signatures | Passed: 622 API/adapter/Harmony target checks, zero unresolved |
-| Historical local gameplay | Chores, coffin cycles, doors and idles exercised during development; not a complete 0.4.27 regression run |
-| 0.4.27 headless/world startup | Not run: user's Valheim session remained active |
+| Installed Windows Valheim 1.0.21, Jötunn 2.30.2 API and private adapter signatures | Passed: 647 API/adapter/Harmony target checks, zero unresolved |
+| Historical local gameplay | Chores, coffin cycles, doors and idles exercised during development; not a complete 0.4.28 regression run |
+| 0.4.28 isolated headless startup | Passed: registration, native dress alternatives and cost widget, plus existing geometry/animation checks |
+| 0.4.28 native world placement/payment/refund cycle | Not yet exercised; startup UI/policy tests do not cover this transaction |
 | Dedicated Windows or Linux server | Not runtime validated; no dedicated-server installation available in this workspace |
 | Two-client ownership migration and config enforcement | Not gameplay validated |
 | Crossplay / Xbox | Not validated; all clients must be able to load the required mods |
@@ -35,7 +36,7 @@ Wards are checked using the **coffin builder's** permission identity. Opening a 
 
 API resolution proves that referenced members exist, not that networking, native assets, animation state, or save recovery behave correctly at runtime. Until the checks below pass, describe multiplayer support as **experimental** in public listings.
 
-The 0.4.27 recovery checks cover identity/reciprocal-link authorization and orphan-confirmation transitions. They do not serialize a native world or exercise native inventory transfer between real peers. The release adds guards before transfers and retirement, but does not make separate native ZDO updates into a crash-atomic transaction. Scan timing is observable in `bonehilda_status`; allocation reductions have not been benchmarked in live multiplayer.
+The 0.4.28 recovery checks cover identity/reciprocal-link authorization and orphan-confirmation transitions. They do not serialize a native world or exercise native inventory transfer between real peers. The release adds guards before transfers and retirement, but does not make separate native ZDO updates into a crash-atomic transaction. Scan timing is observable in `bonehilda_status`; allocation reductions have not been benchmarked in live multiplayer.
 
 ## Multiplayer acceptance checks still required
 

@@ -4,7 +4,7 @@
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.27.** This guide records implementation details and developer test scenarios. Use the [public README](../README.md) for installation and the [server matrix](SERVER.md) for current validation status. Historical local probes do not establish dedicated-server compatibility.
+**Version 0.4.28.** This guide records implementation details and developer test scenarios. Use the [public README](../README.md) for installation and the [server matrix](SERVER.md) for current validation status. Historical local probes do not establish dedicated-server compatibility.
 
 ## Playing
 
@@ -12,11 +12,15 @@ Build a coffin with the hammer under **Furniture** or **Storage**, near a workbe
 
 | Hammer piece | Bonehilda | Supply chest | Recipe | Prefab |
 | --- | --- | --- | --- | --- |
-| Bonehilda's coffin (0 stars) | 0 stars; red dress | 2 slots | 20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, 1 Simple Undyed Dress | `BH_Coffin_0Star` |
-| Bonehilda's coffin (1 star) | 1 star; black dress | 4 slots | 25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, 1 Plain Brown Dress | `BH_Coffin_1Star` |
-| Bonehilda's coffin (2 stars) | 2 stars; blush floral dress | 8 slots | 30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, 1 Blue Dress with Beads | `BH_Coffin` |
+| Bonehilda's coffin (0 stars) | 0 stars; red dress | 2 slots | 20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress | `BH_Coffin_0Star` |
+| Bonehilda's coffin (1 star) | 1 star; black dress | 4 slots | 25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress | `BH_Coffin_1Star` |
+| Bonehilda's coffin (2 stars) | 2 stars; blush floral dress | 8 slots | 30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress | `BH_Coffin` |
 
-Each tier consumes one dress from Hildir: undyed, plain, then beaded. Ectoplasm supplies the ghostly spark; no refined eitr or wisps are required. Existing coffins keep their tier and inventory when recipes change.
+Each tier consumes one unequipped Hildir dress of any of the ten vanilla styles. Ectoplasm supplies the ghostly spark; no refined eitr or wisps are required. Existing coffins keep their tier and inventory when recipes change.
+
+`AnyDressCost.cs` scopes alternative resources to the native coffin requirement check and HUD. `ArmorDress10` is the single recipe sentinel, not an extra ingredient. Native `TryPlacePiece`/`SetCreator` hooks identify the newly placed coffin, and the following same-frame `ConsumeResources` call charges the chosen unequipped item instance while native code handles other materials. Missing stock rolls back that newly placed piece. New coffins store `BH_dressCostRecorded` and `BH_buildDress` for native refund substitution; missing records retain the legacy tier dress. Free builds record no paid dress. Temporary requirement arrays are restored in Harmony finalizers. Other build pieces, inventory counting, and item removal APIs are not globally changed. Third-party construction flows that bypass the native hammer placement/consumption sequence require separate compatibility testing.
+
+The helper in `tests/DressCostRuntimeChecks.cs` runs after native prefab availability in an isolated Unity startup probe. It temporarily replaces the inactive Player prefab's inventory/knowledge and the cost widget, restoring those in `finally`. It tests real item prefabs and native UI hooks, not a full world placement transaction. Never call it from a live game session.
 
 Each coffin keeps a shallow side profile. The zero-star wooden case is 67 cm deep and the larger tiers scale with their maids. Inside the doorway, the skeleton, dress, and hammer ease together into a shallower pose and regain their full depth on exit. The six-sided coffin has a flat crown, broad shoulders, a tapered foot, and a withered-bone frame around a quilted lining and a hinged timber door. The doors carry linked lozenges, a three-lobed knot, and a four-loop weave in ascending tier order. Crooked, weathered bone rails frame both the front and the back. The recessed candles progress from a beeswax stub in iron to an ivory pillar in bronze and a twisted plum taper in a petalled cup. Each flame bends at the wick and its recessed light flickers with it. The hammer icons are renders of the three finished coffins. Leave clear space in front for Bonehilda to enter and return.
 
@@ -177,7 +181,7 @@ Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). No g
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build.ps1
 ```
 
-The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.27.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
+The script restores the dependency lockfile, builds the plugin, runs the checks, and writes `dist/Bonehilda-0.4.28.zip`. It derives the ZIP name and mod-manager version from the project version, verifies the assembly version matches, and includes the icon and description. Use `-Dotnet C:/path/to/dotnet.exe` for a private SDK. CI runs the same script.
 
 Every requested build is delivered by committing and pushing the completed source and publishing the matching ZIP on GitHub Releases. After pushing, `scripts/publish-release.ps1` derives the version from the project, uploads the ZIP, and verifies its public download by SHA-256. It uses the existing Git Credential Manager login and accepts an optional `-NotesPath` file for release notes.
 

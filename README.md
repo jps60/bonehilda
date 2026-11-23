@@ -2,7 +2,7 @@
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.27 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.28 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
 ![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/main/assets/icon.png)
 
@@ -21,11 +21,13 @@ Find **Bonehilda's coffin** in the hammer's **Furniture** category (some build-m
 
 | Coffin tier | Dress | Supply slots | Build materials |
 | --- | --- | --- | --- |
-| 0 stars | Red | 2 | 20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, 1 Simple Undyed Dress |
-| 1 star | Black | 4 | 25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, 1 Plain Brown Dress |
-| 2 stars | Blush floral | 8 | 30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, 1 Blue Dress with Beads |
+| 0 stars | Red | 2 | 20 Fine Wood, 10 Bone Fragments, 2 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress |
+| 1 star | Black | 4 | 25 Ancient Bark, 10 Bone Fragments, 5 Withered Bones, 4 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress |
+| 2 stars | Blush floral | 8 | 30 Ancient Bark, 20 Bone Fragments, 10 Withered Bones, 8 Ectoplasm, 1 Skeleton Trophy, 1 Any Hildir Dress |
 
-Each tier uses a dress sold by Hildir. All tiers perform the same chores; their star level, appearance, and storage differ.
+Each tier uses one unequipped dress sold by Hildir, of any of the ten vanilla styles. All tiers perform the same chores; their star level, appearance, and storage differ.
+
+The hammer costs show a single **Any dress — 1** slot. Its icon follows the dress available in your inventory; hover it to see which dress will be used. The first eligible dress in inventory order (top row first, then left to right) is consumed. Equipped dresses are protected: unequip one if you want to use it. Dismantling returns the dress type paid, following normal building-resource refunds; this does not preserve custom item data or upgrades. Existing coffins retain their previous tier-specific dress refund.
 
 Open the coffin and leave matching materials inside. She uses **her own coffin's inventory**, within **30 m of the coffin** by default. Interact with her using **[E] Dismiss** to send her off duty. **[E] Recall** cancels her return; opening the coffin recalls a resting maid. Shift-use renames her. Dismissal preserves health and carried supplies are returned or dropped if storage is full.
 

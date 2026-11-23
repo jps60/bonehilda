@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.27";
+    public const string Version = "0.4.28";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -178,7 +178,7 @@ public sealed class Plugin : BaseUnityPlugin
 
     private void RegisterCoffin(CoffinTier tier)
     {
-        var requirements = tier.Recipe.Select(r => new RequirementConfig(r.Item, r.Amount, 0, true)).ToArray();
+        var requirements = tier.Recipe.Select(r => new RequirementConfig(r.Item, r.Amount, 0, !DressCostPolicy.IsDress(r.Item))).ToArray();
         var coffin = new CustomPiece(tier.Prefab, "piece_chest_wood", new PieceConfig
         {
             Name = tier.Name,

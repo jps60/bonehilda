@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/Bonehilda/DressCostPolicy.cs" Link="DressCostPolicy.cs" />
     <Compile Include="../../src/Bonehilda/HomeIdentityPolicy.cs" Link="HomeIdentityPolicy.cs" />
     <Compile Include="../../src/Bonehilda/SupplyContinuation.cs" Link="SupplyContinuation.cs" />
     <Compile Include="../../src/Bonehilda/FuelPolicy.cs" Link="FuelPolicy.cs" />
