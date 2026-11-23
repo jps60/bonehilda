@@ -121,7 +121,7 @@ internal sealed class RepairApproach
         foreach (var collider in piece.GetComponentsInChildren<Collider>())
             if (collider.enabled && !collider.isTrigger) bounds.Encapsulate(collider.bounds);
         topY = Mathf.Max(feet.y + 1f, bounds.max.y + .5f);
-        bottomY = bounds.min.y - (repairMode ? Plugin.RepairReach : Plugin.InteractionReach) - 2f;
+        bottomY = RepairApproachPolicy.SearchBottom(bounds.min.y, repairMode ? Plugin.RepairReach : maid.SupplyReach(piece));
         foreach (var center in new[] { feet, anchor })
         {
             columns.Add(center);

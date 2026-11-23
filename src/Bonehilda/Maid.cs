@@ -1033,6 +1033,9 @@ public sealed class Maid : MonoBehaviour
 
     private bool WithinWorkReach(Piece piece, Vector3 point) => WithinSupplyReach(piece, point, transform.position);
 
+    internal float SupplyReach(Piece piece) => SupplyInteraction.Reach(piece,
+        job != null && job.Piece == piece ? job.Supply?.Port : null, Plugin.InteractionReach);
+
     internal bool WithinSupplyReach(Piece piece, Vector3 point, Vector3 feet, float margin = 0)
     {
         var eye = feet + character.GetEyePoint() - transform.position;
@@ -1150,6 +1153,9 @@ public sealed class Maid : MonoBehaviour
             supplyApproach = supplyApproach.State, supplyStandingPoint = supplyApproach.Position, supplyRetries = supplyRetries.Count,
             coffinApproach = coffinApproach.State, coffinStandingPoint = coffinApproach.Position, coffinRetries = coffinRetries.Count,
             supplyLastFailure = supplyLastFailure, checkingPickupRoute = job?.PickupRouteStarted == true && !HasCargo,
+            supplyEffectiveReach = job?.Supply != null ? SupplyReach(job.Piece) : Plugin.InteractionReach,
+            supplyProbes = supplyApproach.Probes, supplyRejectedSpace = supplyApproach.RejectedSpace,
+            supplyRejectedSight = supplyApproach.RejectedSight, supplyRejectedPath = supplyApproach.RejectedPath,
             interactionReach = Plugin.InteractionReach,
             animatorClips = string.Join(", ", animations.GetComponentInChildren<Animator>().GetCurrentAnimatorClipInfo(0).Select(c => c.clip.name)),
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,

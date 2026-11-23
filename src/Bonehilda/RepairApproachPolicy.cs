@@ -2,6 +2,7 @@ namespace Bonehilda;
 
 internal static class RepairApproachPolicy
 {
+    internal static float SearchBottom(float surfaceY, float reach) => surfaceY - reach - 2f;
     internal static bool SupportsStep(float previousHeight, float floorHeight, float normalY) =>
         normalY >= .65f && System.Math.Abs(floorHeight - previousHeight) <= .4f;
 

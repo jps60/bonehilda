@@ -216,6 +216,8 @@ static IEnumerable<(string Name, bool Passed)> SupplyFailureChecks()
 
 static IEnumerable<(string Name, bool Passed)> ApproachChecks()
 {
+    yield return ("hanging fixture native offset includes lower standing floors", RepairApproachPolicy.SearchBottom(87.5f, 3.5f + 3f) <= 80f);
+    yield return ("base reach alone would miss the same lower floor", RepairApproachPolicy.SearchBottom(87.5f, 3.5f) > 80f);
     yield return ("short local walks retain continuous level support", RepairApproachPolicy.SupportsStep(80, 80, 1));
     yield return ("short local walks tolerate a shallow step", RepairApproachPolicy.SupportsStep(80, 80.3f, .9f));
     yield return ("short local walks reject a drop to another floor", !RepairApproachPolicy.SupportsStep(80, 78, 1));

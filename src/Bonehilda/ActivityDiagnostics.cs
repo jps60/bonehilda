@@ -32,6 +32,8 @@ internal sealed class MaidActivity
     public Vector3 coffinStandingPoint;
     public int coffinRetries;
     public bool checkingPickupRoute;
+    public float supplyEffectiveReach;
+    public int supplyProbes, supplyRejectedSpace, supplyRejectedSight, supplyRejectedPath;
     public float interactionReach;
     public bool dustingPose, seated;
     public int stepJumps;
