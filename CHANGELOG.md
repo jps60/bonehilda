@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.38
+
+- Cache UI types, properties and tooltip fields used by the Any dress cost label. Previously each preview frame repeatedly scanned loaded assemblies through Harmony's TypeByName helper, creating heavy CPU work while a coffin was selected.
+- Keep the 0.4.37 HUD-capacity fix and all recipe/dress-selection behavior. Live placement frame-time validation requires restarting into this version.
+
 ## 0.4.37
 
 - Fix repeated build-HUD IndexOutOfRangeException while previewing coffins whose ingredients plus crafting station exceed the native requirement slots. Allocate additional UI entries once, preserving all recipe costs and the station requirement.
