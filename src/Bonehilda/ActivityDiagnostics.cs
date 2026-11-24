@@ -15,6 +15,8 @@ internal sealed class MaidActivity
     public int crowdBypasses, shooRequests;
     public float crowdBlockedSeconds;
     public string crowdState = "none";
+    public string lastShooTame = "none", lastShooOutcome = "no request";
+    public float lastShooAge = -1;
     public float scanMilliseconds, scanAgeSeconds;
     public string id = "", name = "", activity = "", phase = "", target = "", targetId = "", cargo = "", idle = "", door = "", station = "", reservation = "";
     public int stars, pathNodes, repairRetries, skippedJobs;

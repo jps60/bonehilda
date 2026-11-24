@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.34
+
+- Experimental branch diagnostics: report the last requested tame, request age and owner-side result in activity snapshots. Distinguish unavailable remote-owner results from actual rejections.
+- Log rejected shoo requests with each attempted retreat distance and its blocking collider, floor-support failure, door guard, ward/range restriction, or tame cooldown. Throttle repeated identical rejections.
+- Log whether an accepted retreat completes or cancels, including distance moved and the cancellation reason. Keep the existing movement distances, cooldowns, eligibility and enclosure protections.
+
 ## 0.4.33
 
 - Experimental branch only: prefer local bypasses around tames, and ask a blocking tame's owning peer for a short straight-away walk when bypasses are expensive or blocked.

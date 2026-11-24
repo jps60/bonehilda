@@ -1352,6 +1352,7 @@ public sealed class Maid : MonoBehaviour
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,
             stepJumps = data.GetInt("BH_stepJumps"),
             crowdBypasses = crowd.Bypasses, shooRequests = crowd.Requests, crowdBlockedSeconds = crowd.BlockedSeconds, crowdState = crowd.State,
+            lastShooTame = crowd.LastShooTame, lastShooOutcome = crowd.LastShooOutcome, lastShooAge = crowd.LastShooAge,
             walkSteps = data.GetInt("BH_walkSteps"), smoothStepping = Stepping,
             groundResting = idle.GroundResting,
             idleShelterLevel = IdleShelter.Tier(transform.position),

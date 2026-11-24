@@ -8,15 +8,20 @@ namespace Bonehilda;
 internal static class CrowdGeometry
 {
     internal static bool Clear(Character actor, Vector3 from, Vector3 to, Character? ignore = null)
+        => ClearReason(actor, from, to, ignore, out _);
+
+    internal static bool ClearReason(Character actor, Vector3 from, Vector3 to, Character? ignore, out string reason)
     {
+        reason = "clear";
         var capsule = actor.GetComponent<CapsuleCollider>();
-        if (!capsule || (to - from).magnitude > 6f || Mathf.Abs(to.y - from.y) > .3f) return false;
+        if (!capsule || (to - from).magnitude > 6f || Mathf.Abs(to.y - from.y) > .3f) { reason = "unsupported capsule, distance or height"; return false; }
         var previousY = from.y;
         var count = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(from, to) / .35f));
         for (var i = 1; i <= count; i++)
         {
             var sample = Vector3.Lerp(from, to, i / (float)count);
-            if (!Floor(sample, previousY, out var floor) || Mathf.Abs(floor.y - sample.y) > .2f) return false;
+            if (!Floor(sample, previousY, out var floor) || Mathf.Abs(floor.y - sample.y) > .2f)
+            { reason = "floor support/height at " + Vector3.Distance(from, sample).ToString("F1") + "m"; return false; }
             previousY = floor.y;
         }
         // Wolves use a horizontal capsule; preserve its actual orientation.
@@ -30,10 +35,19 @@ internal static class CrowdGeometry
         var bottom = center - axis * half; var top = center + axis * half;
         var offset = to - from;
         var mask = RepairGeometry.Solids | LayerMask.GetMask("character", "character_net");
-        return !Physics.CapsuleCastAll(bottom, top, radius, offset.normalized, offset.magnitude, mask, QueryTriggerInteraction.Ignore)
-            .Any(hit => Other(hit.collider, actor, ignore))
-            && !Physics.OverlapCapsule(bottom + offset, top + offset, radius, mask, QueryTriggerInteraction.Ignore)
-                .Any(c => Other(c, actor, ignore));
+        var hitCollider = Physics.CapsuleCastAll(bottom, top, radius, offset.normalized, offset.magnitude, mask, QueryTriggerInteraction.Ignore)
+            .Where(hit => Other(hit.collider, actor, ignore)).OrderBy(hit => hit.distance).Select(hit => hit.collider).FirstOrDefault();
+        if (hitCollider) { reason = "path blocked by " + Obstacle(hitCollider); return false; }
+        var overlap = Physics.OverlapCapsule(bottom + offset, top + offset, radius, mask, QueryTriggerInteraction.Ignore)
+            .FirstOrDefault(c => Other(c, actor, ignore));
+        if (overlap) { reason = "destination blocked by " + Obstacle(overlap); return false; }
+        return true;
+    }
+
+    private static string Obstacle(Collider collider)
+    {
+        var view = collider.GetComponentInParent<ZNetView>();
+        return view && view.IsValid() ? Utils.GetPrefabName(view.gameObject) + " [" + view.GetZDO().m_uid + "]" : collider.name;
     }
 
     private static bool Other(Collider collider, Character actor, Character? ignore)
@@ -52,7 +66,11 @@ internal static class CrowdGeometry
     }
 
     internal static bool CrossesDoor(Vector3 from, Vector3 to)
+        => CrossesDoorReason(from, to, out _);
+
+    internal static bool CrossesDoorReason(Vector3 from, Vector3 to, out string reason)
     {
+        reason = "no door crossing";
         foreach (var door in MaidDoorWatch.Loaded)
         {
             if (!door) continue;
@@ -64,7 +82,13 @@ internal static class CrowdGeometry
             if (a * b > 0 || Mathf.Abs(a - b) < .001f) continue;
             var crossing = Vector3.Lerp(from, to, Mathf.Clamp01(a / (a - b))); crossing.y = center.y;
             // Conservative gate width: refuse crossing even an already-open door.
-            if ((crossing - center).sqrMagnitude < 36f) return true;
+            if ((crossing - center).sqrMagnitude < 36f)
+            {
+                var view = door.GetComponent<ZNetView>();
+                reason = "door/gate crossing guard: " + Utils.GetPrefabName(door.gameObject)
+                    + (view && view.IsValid() ? " [" + view.GetZDO().m_uid + "]" : "");
+                return true;
+            }
         }
         return false;
     }
@@ -82,6 +106,24 @@ internal sealed class TameCrowd
     internal bool Bypassing => bypass.Count > 0;
     internal float BlockedSeconds;
     internal string State = "none";
+    private ZNetView? lastRequestedTame;
+    private ZDOID lastRequester;
+    private float lastRequestedAt;
+    internal string LastShooTame => lastRequestedTame && lastRequestedTame!.IsValid() ? lastRequestedTame.GetZDO().m_uid.ToString() : "none";
+    internal float LastShooAge => Requests == 0 ? -1 : Mathf.Max(0, Time.time - lastRequestedAt);
+    internal string LastShooOutcome
+    {
+        get
+        {
+            if (!lastRequestedTame || !lastRequestedTame!.IsValid()) return Requests == 0 ? "no request" : "tame unloaded";
+            if (!lastRequestedTame.IsOwner()) return "handled by remote tame owner; see owner log";
+            var receiver = lastRequestedTame.GetComponent<TameYield>();
+            if (!receiver) return "receiver missing";
+            if (receiver.LastRequester != lastRequester || receiver.LastRequestTime < lastRequestedAt - .01f)
+                return "no matching receiver result (or superseded by another maid)";
+            return receiver.LastRejection == "accepted" ? "accepted; " + receiver.MovementOutcome : receiver.LastRejection;
+        }
+    }
 
     internal void Reset() { bypass.Clear(); blocker = null; progress.Reset(); blockedFor = 0; nextScan = 0; State = "none"; }
 
@@ -139,7 +181,9 @@ internal sealed class TameCrowd
             && Time.time >= nextRequest && TameYield.Eligible(found.GetComponent<MonsterAI>()))
         {
             nextRequest = Time.time + 2f;
-            found.GetComponent<ZNetView>().InvokeRPC(TameYield.Rpc, maid.View.GetZDO().m_uid);
+            lastRequestedTame = found.GetComponent<ZNetView>();
+            lastRequester = maid.View.GetZDO().m_uid; lastRequestedAt = Time.time;
+            lastRequestedTame.InvokeRPC(TameYield.Rpc, lastRequester);
             Requests++; State = "shoo requested";
             return false;
         }
@@ -201,9 +245,23 @@ internal sealed class TameYield : MonoBehaviour
     private bool yielding;
     private Character? requester;
     internal string LastRejection = "none";
+    internal ZDOID LastRequester;
+    internal float LastRequestTime;
     internal Vector3 LastStart, LastTarget;
+    private string movementState = "not started";
+    private float walkedMeters;
+    private ZDOID walkingRequester;
+    internal string MovementOutcome => movementState + "; moved " + (yielding ? Vector3.Distance(actor.transform.position, LastStart) : walkedMeters).ToString("F2") + "m";
+    private string lastLoggedRejection = "";
+    private float nextRejectionLog;
 
-    private void Reject(string reason) { LastRejection = reason; }
+    private void Reject(string reason)
+    {
+        LastRejection = reason;
+        if (reason == lastLoggedRejection && Time.time < nextRejectionLog) return;
+        lastLoggedRejection = reason; nextRejectionLog = Time.time + 10f;
+        Plugin.Instance.LogInfo("SHOO rejected: " + LastRequester + " -> " + view.GetZDO().m_uid + ": " + reason);
+    }
 
     private void OnDisable() { if (!ReferenceEquals(ai, null)) Active.Remove(ai); yielding = false; }
 
@@ -223,35 +281,44 @@ internal sealed class TameYield : MonoBehaviour
 
     private void Request(long sender, ZDOID maidId)
     {
-        if (!Plugin.TameCrowdEnabled.Value || !Plugin.TameShooEnabled.Value || !SessionSupport.Active
-            || !view.IsValid() || !view.IsOwner() || Time.time < cooldown
-            || ZNet.instance.GetTime().Ticks < view.GetZDO().GetLong("BH_nextShoo")) { Reject("disabled, not owner, or cooldown"); return; }
-        if (!Eligible(ai)) { Reject("ineligible tame: tamed=" + actor.IsTamed() + " alerted=" + ai.IsAlerted() + " sleeping=" + ai.IsSleeping() + " target=" + (bool)ai.GetTargetCreature() + " following=" + (bool)ai.GetFollowTarget()); return; }
+        if (!view.IsValid() || !view.IsOwner()) return;
+        // Keep diagnostics bound to an authenticated nearby requester, just as movement is.
         var obj = ZNetScene.instance.FindInstance(maidId);
         var maid = obj ? obj.GetComponent<Maid>() : null;
         if (!maid || !maid!.View.IsValid() || maid.View.GetZDO().GetOwner() != sender || maid.GetComponent<Character>().IsDead()
-            || (maid.transform.position - actor.transform.position).sqrMagnitude > 9f) { Reject("requester ownership, distance or life state"); return; }
+            || (maid.transform.position - actor.transform.position).sqrMagnitude > 9f) return;
+        LastRequester = maidId; LastRequestTime = Time.time;
+        if (!Plugin.TameCrowdEnabled.Value || !Plugin.TameShooEnabled.Value || !SessionSupport.Active) { Reject("disabled or unsupported session"); return; }
+        var cooldownSeconds = Mathf.Max(cooldown - Time.time,
+            (float)((view.GetZDO().GetLong("BH_nextShoo") - ZNet.instance.GetTime().Ticks) / (double)System.TimeSpan.TicksPerSecond));
+        if (cooldownSeconds > 0) { Reject("tame cooldown active"); return; }
+        if (!Eligible(ai)) { Reject("ineligible tame: tamed=" + actor.IsTamed() + " alerted=" + ai.IsAlerted() + " sleeping=" + ai.IsSleeping() + " target=" + (bool)ai.GetTargetCreature() + " following=" + (bool)ai.GetFollowTarget()); return; }
         var homeObj = ZNetScene.instance.FindInstance(maid.View.GetZDO().GetZDOID(Maid.HomeKey));
         var home = homeObj ? homeObj.GetComponent<Coffin>() : null;
-        if (!home || DoorTransit.EnemiesNear(actor, actor.transform.position, maid.transform.position)) { Reject("home or nearby enemy"); return; }
+        if (!home) { Reject("coffin not loaded"); return; }
+        if (DoorTransit.EnemiesNear(actor, actor.transform.position, maid.transform.position)) { Reject("nearby enemy"); return; }
         var away = actor.transform.position - maid.transform.position; away.y = 0;
-        if (away.sqrMagnitude < .01f) return;
+        if (away.sqrMagnitude < .01f) { Reject("no away direction (overlapping centers)"); return; }
         away.Normalize();
+        var failures = new List<string>();
         foreach (var distance in new[] { Mathf.Clamp(Plugin.TameShooDistance.Value, 3.5f, 5f), 3.5f, 5f }.Distinct())
         {
+            var label = distance.ToString("F1") + "m: ";
             var point = actor.transform.position + away * distance;
-            if (!CrowdGeometry.Floor(point, actor.transform.position.y, out point)) { Reject("no destination floor"); continue; }
-            if (!CrowdGeometry.Clear(actor, actor.transform.position, point, maid.GetComponent<Character>())) { Reject("departure body blocked"); continue; }
-            if (CrowdGeometry.CrossesDoor(actor.transform.position, point)) { Reject("door crossing"); continue; }
-            if (!Maid.Allowed(point, home!.Piece.GetCreator())
-                || !MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, Plugin.Radius.Value)) { Reject("permission or radius"); continue; }
+            if (!CrowdGeometry.Floor(point, actor.transform.position.y, out point)) { failures.Add(label + "no destination floor"); continue; }
+            if (!CrowdGeometry.ClearReason(actor, actor.transform.position, point, maid.GetComponent<Character>(), out var clearance)) { failures.Add(label + clearance); continue; }
+            if (CrowdGeometry.CrossesDoorReason(actor.transform.position, point, out var doorReason)) { failures.Add(label + doorReason); continue; }
+            if (!Maid.Allowed(point, home!.Piece.GetCreator())) { failures.Add(label + "ward permission at destination"); continue; }
+            if (!MaintenancePolicy.InRadius((point - home.transform.position).sqrMagnitude, Plugin.Radius.Value)) { failures.Add(label + "outside coffin work radius"); continue; }
             var permitted = true;
             for (var step = .5f; step < distance; step += .5f)
                 if (!Maid.Allowed(actor.transform.position + away * step, home.Piece.GetCreator())) { permitted = false; break; }
-            if (!permitted) continue;
+            if (!permitted) { failures.Add(label + "ward on departure route"); continue; }
             requester = maid.GetComponent<Character>();
             LastStart = actor.transform.position; LastTarget = point;
             target = point; until = Time.time + 8f; cooldown = Time.time + Plugin.TameShooCooldown.Value; yielding = true;
+            movementState = "walking"; walkedMeters = 0;
+            walkingRequester = maidId;
             LastRejection = "accepted";
             Active[ai] = this;
             view.GetZDO().Set("BH_nextShoo", ZNet.instance.GetTime().AddSeconds(Plugin.TameShooCooldown.Value).Ticks);
@@ -259,21 +326,32 @@ internal sealed class TameYield : MonoBehaviour
             Plugin.Instance.LogInfo("SHOO accepted: " + maidId + " -> " + view.GetZDO().m_uid + " distance=" + distance);
             return;
         }
+        Reject("no safe retreat: " + string.Join("; ", failures));
     }
 
     internal void Tick()
     {
         if (!yielding) return;
-        if (!Plugin.TameCrowdEnabled.Value || !Plugin.TameShooEnabled.Value || !view.IsValid() || !view.IsOwner()
-            || Time.time >= until || !Eligible(ai) || DoorTransit.EnemiesNear(actor, actor.transform.position, actor.transform.position)
-            || !CrowdGeometry.Clear(actor, actor.transform.position, target,
-                requester && Vector3.Dot(requester!.transform.position - actor.transform.position, target - actor.transform.position) < 0 ? requester : null))
-        { yielding = false; Active.Remove(ai); return; }
+        if (!Plugin.TameCrowdEnabled.Value || !Plugin.TameShooEnabled.Value || !view.IsValid() || !view.IsOwner())
+        { StopYield("cancelled: disabled/session ownership"); return; }
+        if (Time.time >= until) { StopYield("cancelled: eight-second deadline"); return; }
+        if (!Eligible(ai)) { StopYield("cancelled: tame no longer eligible"); return; }
+        if (DoorTransit.EnemiesNear(actor, actor.transform.position, actor.transform.position)) { StopYield("cancelled: nearby enemy"); return; }
+        if (!CrowdGeometry.ClearReason(actor, actor.transform.position, target,
+            requester && Vector3.Dot(requester!.transform.position - actor.transform.position, target - actor.transform.position) < 0 ? requester : null, out var clearance))
+        { StopYield("cancelled: " + clearance); return; }
         var offset = target - actor.transform.position; offset.y = 0;
-        if (offset.magnitude < .35f) { yielding = false; Active.Remove(ai); ai.StopMoving(); return; }
+        if (offset.magnitude < .35f) { StopYield("completed"); ai.StopMoving(); return; }
         // Native character movement and animations, without fear, fleeing,
         // teleportation, ownership claims or alterations to player commands.
         ai.MoveTowards(offset, false);
+    }
+
+    private void StopYield(string reason)
+    {
+        walkedMeters = Vector3.Distance(actor.transform.position, LastStart);
+        movementState = reason; yielding = false; Active.Remove(ai);
+        Plugin.Instance.LogInfo("SHOO movement: " + walkingRequester + " -> " + (view.IsValid() ? view.GetZDO().m_uid.ToString() : "unloaded") + ": " + MovementOutcome);
     }
 }
 
