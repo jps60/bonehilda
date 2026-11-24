@@ -1,12 +1,14 @@
 # Next build queue
 
+- [ ] Review the procedural animation drafts on `experiment/animation-drafts`: [guide](docs/animation-drafts/README.md), [schematic player](docs/animation-drafts/preview.html). Three shoo poses and three manual Kvastur sweep previews are playable; expanded dusting remains trajectory drafts. Keep wrist/palm, both-arm amplitude, skeleton sound, native Kvastur bristle/grip alignment, floor/overhead reach and every requested target type in the review queue. Main's automatic cleaning coverage is unchanged.
+
 - [x] Allow hot-tub sitting only while the native fireplace is burning; leave if it stops.
 - [x] Reproduce the multi-level windmill route in a private saved-base copy. Correct doorway floor sampling, bent/multiple-door routing and progress-based job timeouts without changing native interaction reach. See [0.4.29 validation](docs/validation-0.4.29.md).
 - [ ] Split the generic “no reachable sightline” diagnostic into no suitable floor/standing clearance, blocked input sight/reach, and incomplete walking route. Capture candidate floor/standing points and blocking collider/door/path endpoint so a later session can identify the actual failed segment. Activity labels alone must not be reported as successful deliveries.
 - [ ] Review long supply backoffs after meaningful door/floor/route-context changes. Preserve the three-retry limit and native player fueling reach; add a bounded, supported stair/landing waypoint fallback only if improved candidate selection and doorway probing still fail. Existing logs do not prove the precise landing is blocked.
 - [x] Remove the global door-plane filter that rejected bent routes. Validate complete segments through doorways and retain close-behind safety.
 - [x] Guard temporary dusting probes against unreadable render meshes and retain physical-collider fallback. Attribution of every historical mesh warning remains unverified.
-- [ ] Investigate the session's single `Hud.SetupPieceInfo` IndexOutOfRangeException. Capture the selected piece/item variant and complete patch context; verify any-dress icon handling and the installed UI-mod combination before attributing it to one mod. BetterUI also independently logged missing `PlayerProfile.GetStat` method errors in the menu.
+- [x] Fix `Hud.SetupPieceInfo` overflow for six ingredients plus crafting station (0.4.37) and cache per-frame Any dress UI reflection (0.4.38). User confirmed the preview slowdown was resolved. BetterUI's separate missing `PlayerProfile.GetStat` method error is not attributed to this fix.
 
 # Deferred animation integration
 

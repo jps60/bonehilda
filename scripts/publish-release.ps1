@@ -51,7 +51,7 @@ if (-not $release) {
     $release = @($existingReleases | Where-Object { $_.tag_name -eq $tag }) | Select-Object -First 1
 }
 if (-not $release) {
-    $title = if ($isExperimental) { "Bonehilda $Version - tame shoo experiment $ExperimentNumber" } else { "Bonehilda $Version" }
+    $title = if ($isExperimental) { "Bonehilda $Version - " + $ExperimentalBranch.Substring('experiment/'.Length).Replace('-', ' ') + " $ExperimentNumber" } else { "Bonehilda $Version" }
     $body = @{ tag_name = $tag; target_commitish = $head; name = $title; body = $notes; draft = $true; prerelease = $isExperimental } | ConvertTo-Json -Depth 5
     $release = Invoke-RestMethod -Method Post -Uri ($repoApi + '/releases') -Headers $headers -ContentType 'application/json' -Body $body
 }

@@ -20,6 +20,13 @@ public sealed class Maid : MonoBehaviour
     internal ZNetView View { get; private set; } = null!;
     internal bool HasCargo => cargo != null && cargo.GetAllItems().Count > 0;
     internal bool Stepping => ledges.Stepping;
+    internal bool CanShooGesture => View && View.IsValid() && SessionSupport.Active && !retiring && !OffDuty
+        && !InCoffinPassage(View.GetZDO()) && phase == WorkPhase.None && !audienceActive
+        && !character.IsDead() && !GetComponent<MaidSeating>().Attached && !idle.GroundResting
+        && GetComponent<RugSweepDraft>()?.HoldIdle != true
+        && View.GetZDO().GetString("BH_idleEmote").Length == 0
+        && (View.GetZDO().GetLong(FeatherDuster.StartKey) == 0
+            || (ZNet.instance.GetTime().Ticks - View.GetZDO().GetLong(FeatherDuster.StartKey)) / (double)TimeSpan.TicksPerSecond >= FeatherDuster.Seconds);
     internal bool AvailableForSocial => View && View.IsValid() && !OffDuty && !InCoffinPassage(View.GetZDO())
         && !HasCargo && !audienceActive && job?.Accepted != true && phase == WorkPhase.None && !Stepping
         && !(View.GetZDO().GetBool("BH_taskWork") && View.GetZDO().GetLong("BH_taskUntil") > ZNet.instance.GetTime().Ticks)
@@ -477,6 +484,7 @@ public sealed class Maid : MonoBehaviour
     private void TickIdle(Coffin home, float delta)
     {
         SetPace(MovementPace.Idle);
+        if (GetComponent<RugSweepDraft>().HoldIdle) { idle.Cancel(this); StopNavigation(); ai.StopMoving(); return; }
         if (Plugin.Wander.Value)
         {
             ai.m_randomMoveRange = MaintenancePolicy.WanderRange(Plugin.WanderRadius.Value, Plugin.Radius.Value);

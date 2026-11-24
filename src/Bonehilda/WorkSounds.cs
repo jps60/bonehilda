@@ -39,6 +39,15 @@ internal static class WorkSounds
         if (skeleton != null) Play(skeleton, maid.transform.position, maid.transform.rotation);
     }
 
+    internal static void ShooVoice(Maid maid)
+    {
+        if (!maid.View || !maid.View.IsValid() || !maid.View.IsOwner() || skeleton == null) return;
+        var data = maid.View.GetZDO(); var now = ZNet.instance.GetTime().Ticks;
+        if (now < data.GetLong("BH_nextShooVoice")) return;
+        data.Set("BH_nextShooVoice", now + 8 * System.TimeSpan.TicksPerSecond);
+        Play(skeleton, maid.transform.position, maid.transform.rotation);
+    }
+
     internal static void Repair(Piece piece)
     {
         // The same build effects and positional hammer sound used by player repairs.

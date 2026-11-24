@@ -22,6 +22,12 @@ static bool NewWalkResetsProgress()
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("shoo pose starts blended out", ShooMotion.Sample(0, 0).Blend == 0),
+    ("shoo pose finishes blended out", ShooMotion.Sample(2, ShooMotion.Seconds).Blend == 0),
+    ("left shoo uses only left arm", ShooMotion.Sample(0, 1).Left && !ShooMotion.Sample(0, 1).Right),
+    ("right shoo uses only right arm", !ShooMotion.Sample(1, 1).Left && ShooMotion.Sample(1, 1).Right),
+    ("both-arm shoo uses both arms", ShooMotion.Sample(2, 1).Left && ShooMotion.Sample(2, 1).Right),
+    ("invalid shoo variant leaves native pose alone", ShooMotion.Sample(3, 1).Blend == 0),
     ("grounded turns reject a zero planar vector", !TameCrowdPolicy.HasPlanarDirection(0, 0)),
     ("grounded turns reject negligible planar drift", !TameCrowdPolicy.HasPlanarDirection(.00001f, 0)),
     ("grounded turns preserve ordinary walking direction", TameCrowdPolicy.HasPlanarDirection(.3f, -.4f)),

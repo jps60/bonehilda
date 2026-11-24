@@ -244,6 +244,7 @@ internal sealed class TameCrowd
             lastRequestedTame.InvokeRPC(TameYield.AreaRpc, lastRequester, heading);
             Requests++;
         }
+        if (targets.Length > 0) ShooGesture.Begin(maid);
         return targets.Length;
     }
 

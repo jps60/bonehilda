@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.39";
+    public const string Version = "0.4.40";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -59,6 +59,7 @@ public sealed class Plugin : BaseUnityPlugin
     internal static ConfigEntry<float> DoorEnemyRadius = null!;
     internal static ConfigEntry<bool> ActivityLogging = null!;
     internal static ConfigEntry<bool> TameCrowdEnabled = null!, TameShooEnabled = null!;
+    internal static ConfigEntry<bool> ShooGestures = null!, ShooGestureSounds = null!;
     internal static ConfigEntry<float> TameShooRadius = null!, TameShooAngle = null!, TameShooDuration = null!;
     internal static ConfigEntry<float> TameShooDistance = null!, TameCrowdDelay = null!, TameShooCooldown = null!;
     internal static HashSet<string> LegacySkeletonNames = new HashSet<string>(StringComparer.Ordinal);
@@ -111,9 +112,11 @@ public sealed class Plugin : BaseUnityPlugin
         DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);
         ActivityLogging = Config.Bind("Debugging", "ActivityLogging", false, "Write loaded maid activity, target, path, and cargo snapshots every two seconds to Bonehilda.activity.json and a bounded history log. Local diagnostics only.");
         TameCrowdEnabled = Config.Bind("Experimental", "TameCrowdEnabled", true, new ConfigDescription("Local bypasses around nearby tames. Disable for native navigation. This section name is retained for configuration compatibility.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
-        TameShooEnabled = Config.Bind("Experimental", "TameShooEnabled", true, new ConfigDescription("Shoo calm, waiting tames in a cone along the maid's walking direction when a short bypass is unavailable. Try alternate retreats without crossing the maid. No shoo animation. Disable to test bypasses alone.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        TameShooEnabled = Config.Bind("Experimental", "TameShooEnabled", true, new ConfigDescription("Shoo calm, waiting tames in a cone along the maid's walking direction when a short bypass is unavailable. Try alternate retreats without crossing the maid. Optional draft gestures are controlled by Animations.ShooGestures. Disable shooing to test bypasses alone.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         TameShooRadius = Setting("Experimental", "TameShooRadius", 4f, "Radius in front of the maid affected by a shoo pulse. Up to 12 eligible tames per pulse, outermost first. No animals behind her.", 2f, 6f);
         TameShooAngle = Setting("Experimental", "TameShooAngle", 120f, "Full angle of the forward shoo cone in degrees.", 60f, 180f);
+        ShooGestures = Config.Bind("Animations", "ShooGestures", true, "Draft upper-body left/right/two-arm shoo gestures. Leave locomotion untouched; pause for interactions and other poses.");
+        ShooGestureSounds = Config.Bind("Animations", "ShooGestureSounds", true, "Native skeleton idle rattle with shoo gestures, limited to once per eight seconds. Sound/gesture pairing is marked for user review.");
         TameShooDuration = Setting("Experimental", "TameShooDuration", 3f, "Seconds a shoo follows the maid, checking the forward cone every half-second for new tames. Existing retreats and per-tame cooldowns are preserved.", 1f, 5f);
         TameShooDistance = Setting("Experimental", "TameShooDistance", 4f, "Preferred retreat distance. Search 3.5-5 m targets at multiple angles; replan up to three times if blocked. Keep clear of the maid, doors, unsupported ground and wards. Native arrival tolerance yields roughly 3-5 m of walking.", 3.5f, 5f);
         TameCrowdDelay = Setting("Experimental", "TameCrowdDelay", 1.25f, "Observed crowd obstruction before considering shooing. Short bypasses win immediately.", .5f, 5f);
@@ -122,6 +125,8 @@ public sealed class Plugin : BaseUnityPlugin
         gameObject.AddComponent<FacingDiagnostics>();
         gameObject.AddComponent<SessionNotice>();
         CommandManager.Instance.AddConsoleCommand(new ActivityCommand());
+        CommandManager.Instance.AddConsoleCommand(new ShooDraftCommand());
+        CommandManager.Instance.AddConsoleCommand(new RugSweepDraftCommand());
         harmony = new Harmony(Guid);
         harmony.PatchAll();
         PrefabManager.OnVanillaPrefabsAvailable += Register;
@@ -158,6 +163,8 @@ public sealed class Plugin : BaseUnityPlugin
             // Apply after binding the garment so both the body and cloth grow together.
             prefab.GetComponentInChildren<Animator>(true).transform.localScale *= 1.04f;
             prefab.AddComponent<FeatherDuster>();
+            prefab.AddComponent<ShooGesture>();
+            prefab.AddComponent<RugSweepDraft>();
             prefab.AddComponent<MaidSeating>();
             var drops = prefab.GetComponent<CharacterDrop>();
             if (drops) drops.m_drops.Clear();

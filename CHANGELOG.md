@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.40
+
+- Draft branch only: three additive upper-body shoo gestures (left, right, both) preserve stride and lower-body animation. Owner-selected pose/start time, native skeleton idle rattles, hammer-hand preference and interaction/dismissal preemption.
+- Add bone/pose restoration checks and `bonehilda_shoo left|right|both` for review.
+- Add three manual rug-sweeping previews using renderer-only native Kvastur geometry, with no creature/gameplay components. `bonehilda_sweep long|gather|fan [flip]` exposes uncertain tool-end/grip alignment for review. No automatic rug jobs are added.
+- Add a reproducible schematic motion catalog: five dusting families across six mount heights and five shape bounds, plus three sweep trajectories. All requested target types and uncertain sound/pose/model combinations are retained in the review queue; new dusting eligibility remains pending.
+
 ## 0.4.39
 
 - Merge tested tame avoidance and persistent area shooing into the stable release. Default shoo cone: 4 m, 120 degrees, active for 3 seconds; tames choose alternate safe retreats and can replan when blocked.
