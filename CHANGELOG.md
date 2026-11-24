@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.37
+
+- Fix repeated build-HUD IndexOutOfRangeException while previewing coffins whose ingredients plus crafting station exceed the native requirement slots. Allocate additional UI entries once, preserving all recipe costs and the station requirement.
+- Reuse the expanded entries across preview frames; the native HUD hides unused entries when switching pieces. Add an isolated Unity capacity regression using all three real coffin recipes, including the station-slot bounds and repeated reuse. Rendered HUD validation remains an in-game check.
+
 ## 0.4.36
 
 - Flatten crowd bypass movement onto the ground plane and recognize waypoint arrival horizontally, preventing height-only directions from reaching native turning code.

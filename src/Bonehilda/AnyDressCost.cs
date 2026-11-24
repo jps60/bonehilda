@@ -184,8 +184,36 @@ internal static class AnyDressRefund
 [HarmonyPatch(typeof(Hud), "SetupPieceInfo")]
 internal static class AnyDressHudScope
 {
-    private static void Prefix(Piece __0, out Piece? __state) { __state = AnyDressCost.UiPiece; AnyDressCost.UiPiece = AnyDressCost.IsCoffin(__0) ? __0 : null; }
+    private static void Prefix(Hud __instance, Piece __0, out Piece? __state)
+    {
+        __state = AnyDressCost.UiPiece;
+        AnyDressCost.UiPiece = AnyDressCost.IsCoffin(__0) ? __0 : null;
+        if (AnyDressCost.UiPiece) CoffinBuildHud.EnsureCapacity(__instance, __0);
+    }
     private static Exception? Finalizer(Exception? __exception, Piece? __state) { AnyDressCost.UiPiece = __state; return __exception; }
+}
+
+internal static class CoffinBuildHud
+{
+    internal static void EnsureCapacity(Hud hud, Piece piece)
+    {
+        var original = hud.m_requirementItems;
+        var needed = piece.m_resources.Length + (piece.m_craftingStation ? 1 : 0);
+        if (needed <= original.Length || original.Length == 0) return;
+        var expanded = new GameObject[needed];
+        Array.Copy(original, expanded, original.Length);
+        var template = original[original.Length - 1];
+        var step = original.Length > 1 ? template.transform.localPosition - original[original.Length - 2].transform.localPosition : Vector3.down * 40f;
+        for (var index = original.Length; index < needed; index++)
+        {
+            var entry = UnityEngine.Object.Instantiate(template, template.transform.parent, false);
+            entry.name = "Bonehilda requirement " + index;
+            entry.transform.localPosition = template.transform.localPosition + step * (index - original.Length + 1);
+            entry.SetActive(false);
+            expanded[index] = entry;
+        }
+        hud.m_requirementItems = expanded;
+    }
 }
 
 [HarmonyPatch(typeof(InventoryGui), nameof(InventoryGui.SetupRequirement))]

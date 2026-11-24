@@ -1,14 +1,14 @@
 # Bonehilda
 
-**Experimental tame-shoo branch. Not merged into main.** This preview adds local bypasses and a persistent forward shoo cone. Calm waiting tames search for a clear retreat at several angles, avoiding the maid and doors. No shoo animation is included. Keep your normal r2modman profile on the stable release; test this ZIP in a separate profile. See [the experiment report](https://github.com/jps60/bonehilda/blob/v0.4.36-experiment.1/docs/experiments/tame-shoo/REPORT.md).
+**Experimental tame-shoo branch. Not merged into main.** This preview adds local bypasses and a persistent forward shoo cone. Calm waiting tames search for a clear retreat at several angles, avoiding the maid and doors. No shoo animation is included. Keep your normal r2modman profile on the stable release; test this ZIP in a separate profile. See [the experiment report](https://github.com/jps60/bonehilda/blob/v0.4.37-experiment.1/docs/experiments/tame-shoo/REPORT.md).
 
-[Download the experimental ZIP](https://github.com/jps60/bonehilda/releases/download/v0.4.36-experiment.1/Bonehilda-0.4.36.zip). This prerelease does not replace the stable release.
+[Download the experimental ZIP](https://github.com/jps60/bonehilda/releases/download/v0.4.37-experiment.1/Bonehilda-0.4.37.zip). This prerelease does not replace the stable release.
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.36 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.37 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
-![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.36-experiment.1/assets/icon.png)
+![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.37-experiment.1/assets/icon.png)
 
 ## What she does
 
