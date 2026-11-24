@@ -35,7 +35,7 @@ try {
                 }
                 if ($name -eq 'icon.png' -and $case -eq 'IconSize') { $bytes[19] = 1 }
                 if ($name -eq 'README.md' -and $case -eq 'Artwork') {
-                    $content = [Text.Encoding]::UTF8.GetString($bytes) -replace '/v\d+\.\d+\.\d+/assets/', '/main/assets/'
+                    $content = [Text.Encoding]::UTF8.GetString($bytes) -replace '/v\d+\.\d+\.\d+(?:-experiment\.[1-9][0-9]*)?/assets/', '/main/assets/'
                     $bytes = [Text.Encoding]::UTF8.GetBytes($content)
                 }
                 if ($name.Contains('/') -and $case -eq 'Backslash') { $name = $name.Replace('/', '\') }

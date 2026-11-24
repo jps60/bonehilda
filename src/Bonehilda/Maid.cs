@@ -53,6 +53,7 @@ public sealed class Maid : MonoBehaviour
     private float scanMilliseconds;
     private float scanAt = -1f;
     private readonly NavigationProgress navigation = new NavigationProgress();
+    private readonly TameCrowd crowd = new TameCrowd();
     private readonly LedgeAssist ledges = new LedgeAssist();
     private bool recoveringRoute;
     private Vector3 recoveryPoint, recoveryGoal;
@@ -1003,6 +1004,8 @@ public sealed class Maid : MonoBehaviour
 
     internal void StopNavigation()
     {
+        if (crowd.Bypassing && ai) ResetPath();
+        crowd.Reset();
         navigation.Reset();
         ledges.Reset();
         recoveringRoute = false;
@@ -1025,6 +1028,9 @@ public sealed class Maid : MonoBehaviour
         var doorBlocked = doors.TryBegin(this, ai, point);
         if (View.GetZDO().GetZDOID("BH_openDoor") != ZDOID.None) return;
         var feet = transform.position;
+        if (!doorBlocked && !recoveringRoute && crowd.Tick(this, ai, point, dt,
+                MovementPolicy.Run(pace, (point - feet).sqrMagnitude, passage), usePath: !direct))
+        { navigation.Reset(); return; }
         if (recoveringRoute && (point - recoveryGoal).sqrMagnitude > 1f) StopNavigation();
         if (recoveringRoute)
         {
@@ -1078,6 +1084,7 @@ public sealed class Maid : MonoBehaviour
     internal bool CanIdleVisit(ZNetView view) => idle.Available(view);
     internal void PauseToStand() => standUntil = Mathf.Max(standUntil, Time.time + .8f);
     internal void StepToward(Vector3 point, float delta) => ledges.Tick(this, ai, point, delta);
+    internal bool CrowdStep(Vector3 point, float delta, bool run) => crowd.Tick(this, ai, point, delta, run, false, false);
 
     internal bool CanIdleApproach(Coffin home, Vector3 point)
     {
@@ -1344,6 +1351,8 @@ public sealed class Maid : MonoBehaviour
             animatorClips = string.Join(", ", animations.GetComponentInChildren<Animator>().GetCurrentAnimatorClipInfo(0).Select(c => c.clip.name)),
             dustingPose = GetComponent<FeatherDuster>().IsPosed, seated = GetComponent<MaidSeating>().Attached,
             stepJumps = data.GetInt("BH_stepJumps"),
+            crowdBypasses = crowd.Bypasses, shooRequests = crowd.Requests, crowdBlockedSeconds = crowd.BlockedSeconds, crowdState = crowd.State,
+            lastShooTame = crowd.LastShooTame, lastShooOutcome = crowd.LastShooOutcome, lastShooAge = crowd.LastShooAge,
             walkSteps = data.GetInt("BH_walkSteps"), smoothStepping = Stepping,
             groundResting = idle.GroundResting,
             idleShelterLevel = IdleShelter.Tier(transform.position),

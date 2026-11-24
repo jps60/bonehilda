@@ -1,0 +1,101 @@
+[
+    {
+        "scenario":  "clear",
+        "mode":  "native",
+        "trials":  3,
+        "medianSeconds":  2.731170654296875,
+        "minSeconds":  2.725555419921875,
+        "maxSeconds":  2.7379226684570314,
+        "meanPathMeters":  3.9989032745361328,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "clear",
+        "mode":  "bypass",
+        "trials":  3,
+        "medianSeconds":  2.725738525390625,
+        "minSeconds":  2.7167816162109377,
+        "maxSeconds":  2.735973358154297,
+        "meanPathMeters":  3.9989032745361328,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "clear",
+        "mode":  "shoo",
+        "trials":  3,
+        "medianSeconds":  2.7458648681640627,
+        "minSeconds":  2.7341537475585939,
+        "maxSeconds":  2.8295745849609377,
+        "meanPathMeters":  3.9989032745361328,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "open-tame",
+        "mode":  "native",
+        "trials":  3,
+        "medianSeconds":  5.750617980957031,
+        "minSeconds":  5.7504730224609379,
+        "maxSeconds":  5.7530364990234379,
+        "meanPathMeters":  3.9971790313720703,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "open-tame",
+        "mode":  "bypass",
+        "trials":  3,
+        "medianSeconds":  4.8408203125,
+        "minSeconds":  4.837982177734375,
+        "maxSeconds":  4.842628479003906,
+        "meanPathMeters":  6.4075841903686523,
+        "accepted":  0,
+        "bypasses":  3
+    },
+    {
+        "scenario":  "open-tame",
+        "mode":  "shoo",
+        "trials":  3,
+        "medianSeconds":  4.8278961181640629,
+        "minSeconds":  4.827293395996094,
+        "maxSeconds":  4.8395233154296879,
+        "meanPathMeters":  6.4075841903686523,
+        "accepted":  0,
+        "bypasses":  3
+    },
+    {
+        "scenario":  "narrow-tame",
+        "mode":  "native",
+        "trials":  3,
+        "medianSeconds":  5.7560272216796879,
+        "minSeconds":  5.752593994140625,
+        "maxSeconds":  5.7917633056640629,
+        "meanPathMeters":  3.9971790313720703,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "narrow-tame",
+        "mode":  "bypass",
+        "trials":  3,
+        "medianSeconds":  5.76361083984375,
+        "minSeconds":  5.7486724853515629,
+        "maxSeconds":  5.7743988037109379,
+        "meanPathMeters":  3.9971790313720703,
+        "accepted":  0,
+        "bypasses":  0
+    },
+    {
+        "scenario":  "narrow-tame",
+        "mode":  "shoo",
+        "trials":  3,
+        "medianSeconds":  3.632781982421875,
+        "minSeconds":  3.63165283203125,
+        "maxSeconds":  3.6542205810546877,
+        "meanPathMeters":  3.9883365631103516,
+        "accepted":  3,
+        "bypasses":  0
+    }
+]

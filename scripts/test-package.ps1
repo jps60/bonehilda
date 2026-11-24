@@ -41,7 +41,7 @@ try {
         if ([string]::IsNullOrWhiteSpace($content)) { throw "Empty package document: $name" }
         if ($name -eq 'README.md' -and -not $content.Contains("Version $version")) { throw 'README version is out of date.' }
         if ($name -eq 'README.md' -and ($content.Contains('https://raw.githubusercontent.com/jps60/bonehilda/main/assets/') -or
-            -not $content.Contains("https://raw.githubusercontent.com/jps60/bonehilda/v$version/assets/icon.png"))) { throw 'README artwork must be pinned to the release tag.' }
+            $content -notmatch ('https://raw\.githubusercontent\.com/jps60/bonehilda/v' + [regex]::Escape($version) + '(?:-experiment\.[1-9][0-9]*)?/assets/icon\.png'))) { throw 'README artwork must be pinned to the release tag.' }
         if ($name -eq 'CHANGELOG.md' -and -not $content.Contains("## $version")) { throw 'Changelog lacks this release.' }
     }
     $icon = Read-Bytes $files['icon.png']

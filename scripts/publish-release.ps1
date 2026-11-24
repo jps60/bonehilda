@@ -1,4 +1,4 @@
-param([string]$NotesPath = '', [string]$Tag = '')
+param([string]$NotesPath = '', [string]$Tag = '', [string]$ExperimentalBranch = '', [ValidateRange(1,99)][int]$ExperimentNumber = 1)
 $ErrorActionPreference = 'Stop'
 $env:GIT_TERMINAL_PROMPT = '0'
 $env:GCM_INTERACTIVE = 'Never'
@@ -7,6 +7,8 @@ Set-Location -LiteralPath $projectRoot
 if (git status --porcelain) { throw 'Commit the completed source changes before publishing a release.' }
 [xml]$project = Get-Content -LiteralPath (Join-Path $projectRoot 'src/Bonehilda/Bonehilda.csproj')
 $Version = [string]$project.Project.PropertyGroup.Version
+if ($ExperimentalBranch -and ($Tag -or $ExperimentalBranch -notmatch '^experiment/[a-z0-9/-]+$')) { throw 'Experimental publishing requires an experiment/ branch and no stable tag argument.' }
+$isExperimental = [bool]$ExperimentalBranch
 & (Join-Path $PSScriptRoot 'test-release-version.ps1') -Tag $Tag
 $archive = Join-Path $projectRoot "dist/Bonehilda-$Version.zip"
 if (-not (Test-Path -LiteralPath $archive)) { throw 'Build archive is missing.' }
@@ -18,7 +20,7 @@ $notes = if ($NotesPath) { [IO.File]::ReadAllText([IO.Path]::GetFullPath($NotesP
 }
 $notes += "`r`n`r`nSHA-256: $archiveHash"
 $head = (git rev-parse HEAD).Trim()
-$reference = if ($Tag) { "refs/tags/$Tag" } else { 'refs/heads/main' }
+$reference = if ($isExperimental) { "refs/heads/$ExperimentalBranch" } elseif ($Tag) { "refs/tags/$Tag" } else { 'refs/heads/main' }
 $remote = (git ls-remote origin $reference "$reference^{}")
 $remoteHeads = @($remote | ForEach-Object { ($_ -split '\s+')[0] })
 if ($LASTEXITCODE -ne 0 -or $remoteHeads -notcontains $head) { throw 'Push the matching release commit/tag before publishing.' }
@@ -40,7 +42,7 @@ if ($env:GITHUB_ACTIONS -ne 'true') {
     $account = Invoke-RestMethod -Uri 'https://api.github.com/user' -Headers $headers
     if ($account.login -ne 'jps60') { throw 'Unexpected authenticated GitHub account.' }
 }
-$tag = 'v' + $Version
+$tag = if ($isExperimental) { "v$Version-experiment.$ExperimentNumber" } else { 'v' + $Version }
 $release = $null
 try { $release = Invoke-RestMethod -Uri ($repoApi + '/releases/tags/' + $tag) -Headers $headers }
 catch { if ([int]$_.Exception.Response.StatusCode -ne 404) { throw } }
@@ -49,10 +51,12 @@ if (-not $release) {
     $release = @($existingReleases | Where-Object { $_.tag_name -eq $tag }) | Select-Object -First 1
 }
 if (-not $release) {
-    $body = @{ tag_name = $tag; target_commitish = $head; name = "Bonehilda $Version"; body = $notes; draft = $true; prerelease = $false } | ConvertTo-Json -Depth 5
+    $title = if ($isExperimental) { "Bonehilda $Version - tame shoo experiment $ExperimentNumber" } else { "Bonehilda $Version" }
+    $body = @{ tag_name = $tag; target_commitish = $head; name = $title; body = $notes; draft = $true; prerelease = $isExperimental } | ConvertTo-Json -Depth 5
     $release = Invoke-RestMethod -Method Post -Uri ($repoApi + '/releases') -Headers $headers -ContentType 'application/json' -Body $body
 }
 $assetName = [IO.Path]::GetFileName($archive)
+if ([bool]$release.prerelease -ne $isExperimental) { throw 'Existing release classification differs from the requested publishing mode.' }
 $asset = @($release.assets | Where-Object { $_.name -eq $assetName }) | Select-Object -First 1
 if (-not $asset) {
     $uploadBase = $release.upload_url -replace '\{.*$', ''
@@ -62,7 +66,8 @@ if (-not $asset) {
 if ($asset.size -ne $archiveSize) { throw 'Uploaded archive size does not match the local build.' }
 if ($asset.digest -and $asset.digest -ne ('sha256:' + $archiveHash.ToLowerInvariant())) { throw 'Uploaded archive digest does not match the local build.' }
 if ($release.draft) {
-    $release = Invoke-RestMethod -Method Patch -Uri ($repoApi + '/releases/' + $release.id) -Headers $headers -ContentType 'application/json' -Body '{"draft":false,"make_latest":"true"}'
+    $publication = @{ draft = $false; make_latest = $(if ($isExperimental) { 'false' } else { 'true' }) } | ConvertTo-Json
+    $release = Invoke-RestMethod -Method Patch -Uri ($repoApi + '/releases/' + $release.id) -Headers $headers -ContentType 'application/json' -Body $publication
 }
 $publicHeaders = @{ Accept = 'application/vnd.github+json'; 'User-Agent' = 'Bonehilda-public-release-check' }
 $published = Invoke-RestMethod -Uri ($repoApi + '/releases/tags/' + $tag) -Headers $publicHeaders

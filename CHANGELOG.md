@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.4.38
+
+- Cache UI types, properties and tooltip fields used by the Any dress cost label. Previously each preview frame repeatedly scanned loaded assemblies through Harmony's TypeByName helper, creating heavy CPU work while a coffin was selected.
+- Keep the 0.4.37 HUD-capacity fix and all recipe/dress-selection behavior. Live placement frame-time validation requires restarting into this version.
+
+## 0.4.37
+
+- Fix repeated build-HUD IndexOutOfRangeException while previewing coffins whose ingredients plus crafting station exceed the native requirement slots. Allocate additional UI entries once, preserving all recipe costs and the station requirement.
+- Reuse the expanded entries across preview frames; the native HUD hides unused entries when switching pieces. Add an isolated Unity capacity regression using all three real coffin recipes, including the station-slot bounds and repeated reuse. Rendered HUD validation remains an in-game check.
+
+## 0.4.36
+
+- Flatten crowd bypass movement onto the ground plane and recognize waypoint arrival horizontally, preventing height-only directions from reaching native turning code.
+- Preserve facing for maids and tames actively yielding to them when a requested turn has no valid horizontal direction. Leave other creatures' turning behavior unchanged.
+- With activity logging enabled, capture up to three guarded-turn traces and three remaining engine-message traces per session. Do not suppress Unity messages or change global logging settings. Live confirmation of the reported spam still requires restarting into this build.
+- Add six regressions for zero, negligible, ordinary, NaN, infinite and overflowing planar directions.
+
+## 0.4.35
+
+- Experimental shooing now affects a forward cone (default 4 m / 120 degrees) for a configurable 3 seconds, following the maid and checking for new tames every half-second. Process up to 12 eligible tames per pulse, outermost first, preserving existing retreats and cooldowns.
+- Search up to 30 retreat candidates at different angles and distances, avoiding routes through the maid and reserving separate destinations. Keep supported ground, body clearance, ward, work-radius and no-door-crossing checks.
+- Retry up to three alternate destinations if an accepted retreat becomes blocked, within its original deadline and 5 m displacement limit.
+- Add cone/maid-clearance policy regressions and isolated native fixtures for alternate directions, moving obstructions, groups and late cone entrants.
+
+## 0.4.34
+
+- Experimental branch diagnostics: report the last requested tame, request age and owner-side result in activity snapshots. Distinguish unavailable remote-owner results from actual rejections.
+- Log rejected shoo requests with each attempted retreat distance and its blocking collider, floor-support failure, door guard, ward/range restriction, or tame cooldown. Throttle repeated identical rejections.
+- Log whether an accepted retreat completes or cancels, including distance moved and the cancellation reason. Keep the existing movement distances, cooldowns, eligibility and enclosure protections.
+
+## 0.4.33
+
+- Experimental branch only: prefer local bypasses around tames, and ask a blocking tame's owning peer for a short straight-away walk when bypasses are expensive or blocked.
+- Limit requests to calm, waiting, unridden tames, with supported body-clear destinations, work-radius/ward checks, no door/gate crossings and per-tame cooldowns. Preserve native physics, combat updates and player commands.
+- Add separate crowd/bypass/shoo settings and diagnostics. No custom shoo animation, server-run AI or stable-profile installation.
+
 ## 0.4.32
 
 - Deliver the release tooling introduced in the unpublished 0.4.31 tag: current-game CI checks, validated version bumping, tagged artwork and automatic GitHub/Thunderstore publishing.
