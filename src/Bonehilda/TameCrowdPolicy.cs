@@ -2,6 +2,12 @@ namespace Bonehilda;
 
 internal static class TameCrowdPolicy
 {
+    internal static bool HasPlanarDirection(float x, float z)
+    {
+        var squared = x * x + z * z;
+        return !float.IsNaN(squared) && !float.IsInfinity(squared) && squared > .000001f;
+    }
+
     // Price extra walking time against a 1.5-second disruption penalty. Never
     // shoo until actual crowd immobility has exceeded the configured delay.
     internal static bool PreferShoo(float extraMeters, float speed, float stalled, float delay) =>

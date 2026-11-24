@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.36
+
+- Flatten crowd bypass movement onto the ground plane and recognize waypoint arrival horizontally, preventing height-only directions from reaching native turning code.
+- Preserve facing for maids and tames actively yielding to them when a requested turn has no valid horizontal direction. Leave other creatures' turning behavior unchanged.
+- With activity logging enabled, capture up to three guarded-turn traces and three remaining engine-message traces per session. Do not suppress Unity messages or change global logging settings. Live confirmation of the reported spam still requires restarting into this build.
+- Add six regressions for zero, negligible, ordinary, NaN, infinite and overflowing planar directions.
+
 ## 0.4.35
 
 - Experimental shooing now affects a forward cone (default 4 m / 120 degrees) for a configurable 3 seconds, following the maid and checking for new tames every half-second. Process up to 12 eligible tames per pulse, outermost first, preserving existing retreats and cooldowns.

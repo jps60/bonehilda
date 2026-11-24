@@ -2,7 +2,9 @@
 
 **Branch: `experiment/tame-shoo`. Not merged into main.** No custom shoo animation or new audio is included. The normal r2modman profile stays on the stable build. This experiment does not change where the AI runs or keep areas loaded.
 
-## Current preview: 0.4.35
+## Current preview: 0.4.36
+
+The 0.4.36 follow-up prevents height-only bypass steering and invalid grounded facing requests, and captures limited traces for any remaining engine rotation messages. The checks below describe 0.4.35's area-shoo validation; 0.4.36 needs live confirmation of the reported log-spam fix. Policy checks now total 420.
 
 Shooing now uses a moving forward cone: 4 m radius, 120 degrees, active for 3 seconds by default. `TameShooRadius`, `TameShooAngle` and `TameShooDuration` are configurable. Every half-second during the active window, up to 12 eligible tames are considered, outermost first. Animals already retreating or on cooldown keep their existing plans. A later pulse can reach additional animals in an unusually large group.
 

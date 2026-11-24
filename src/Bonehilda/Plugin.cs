@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.35";
+    public const string Version = "0.4.36";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -119,6 +119,7 @@ public sealed class Plugin : BaseUnityPlugin
         TameCrowdDelay = Setting("Experimental", "TameCrowdDelay", 1.25f, "Observed crowd obstruction before considering shooing. Short bypasses win immediately.", .5f, 5f);
         TameShooCooldown = Setting("Experimental", "TameShooCooldown", 20f, "Per-tame cooldown between accepted requests.", 10f, 120f);
         gameObject.AddComponent<ActivityDiagnostics>();
+        gameObject.AddComponent<FacingDiagnostics>();
         gameObject.AddComponent<SessionNotice>();
         CommandManager.Instance.AddConsoleCommand(new ActivityCommand());
         harmony = new Harmony(Guid);

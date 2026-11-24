@@ -22,6 +22,12 @@ static bool NewWalkResetsProgress()
 
 var checks = new (string Name, bool Passed)[]
 {
+    ("grounded turns reject a zero planar vector", !TameCrowdPolicy.HasPlanarDirection(0, 0)),
+    ("grounded turns reject negligible planar drift", !TameCrowdPolicy.HasPlanarDirection(.00001f, 0)),
+    ("grounded turns preserve ordinary walking direction", TameCrowdPolicy.HasPlanarDirection(.3f, -.4f)),
+    ("grounded turns reject NaN", !TameCrowdPolicy.HasPlanarDirection(float.NaN, 1)),
+    ("grounded turns reject infinity", !TameCrowdPolicy.HasPlanarDirection(1, float.PositiveInfinity)),
+    ("grounded turns reject overflowing magnitude", !TameCrowdPolicy.HasPlanarDirection(float.MaxValue, float.MaxValue)),
     ("no shoo before a real stall", !TameCrowdPolicy.PreferShoo(float.PositiveInfinity, 2, 1, 1.25f)),
     ("short detour wins over disturbing a tame", !TameCrowdPolicy.PreferShoo(2, 2, 2, 1.25f)),
     ("long detour can justify shoo after delay", TameCrowdPolicy.PreferShoo(5, 2, 2, 1.25f)),

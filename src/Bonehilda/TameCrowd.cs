@@ -158,11 +158,12 @@ internal sealed class TameCrowd
         }
         if (bypass.Count > 0)
         {
-            if ((bypass.Peek() - feet).sqrMagnitude < .12f) bypass.Dequeue();
+            var remaining = bypass.Peek() - feet; remaining.y = 0;
+            if (remaining.sqrMagnitude < .12f) bypass.Dequeue();
             if (bypass.Count == 0) { ai.m_path.Clear(); ai.m_lastFindPathTime = -100f; State = "bypass complete"; return false; }
             if (!progress.Advance(delta, feet.x, feet.z, destination.x, destination.y, destination.z, 1.5f)
                 && CrowdGeometry.Clear(actor, feet, bypass.Peek()))
-            { State = "walking around tame"; ai.MoveTowards(bypass.Peek() - feet, run); return true; }
+            { State = "walking around tame"; return MovePlanar(ai, bypass.Peek() - feet, run); }
             bypass.Clear(); ai.m_path.Clear(); ai.m_lastFindPathTime = -100f;
             nextPlan = Time.time + 1.5f; blockedFor = Plugin.TameCrowdDelay.Value;
         }
@@ -211,7 +212,15 @@ internal sealed class TameCrowd
         if (route.Count == 0) { State = "tame blocks route: " + reason; return false; }
         foreach (var node in route) bypass.Enqueue(node);
         Bypasses++; progress.Reset();
-        ai.MoveTowards(bypass.Peek() - feet, run); State = "walking around tame";
+        State = "walking around tame";
+        return MovePlanar(ai, bypass.Peek() - feet, run);
+    }
+
+    private static bool MovePlanar(MonsterAI ai, Vector3 direction, bool run)
+    {
+        direction.y = 0;
+        if (!TameCrowdPolicy.HasPlanarDirection(direction.x, direction.z)) { ai.StopMoving(); return false; }
+        ai.MoveTowards(direction.normalized, run);
         return true;
     }
 
