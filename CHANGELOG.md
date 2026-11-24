@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.39
+
+- Merge tested tame avoidance and persistent area shooing into the stable release. Default shoo cone: 4 m, 120 degrees, active for 3 seconds; tames choose alternate safe retreats and can replan when blocked.
+- Include the coffin build-HUD capacity fix and cached dress-label reflection that resolved placement-preview slowdown.
+- Preserve existing configuration values, including the historically named Experimental section for shoo settings. No new animation or server-only AI mode is introduced.
+
 ## 0.4.38
 
 - Cache UI types, properties and tooltip fields used by the Any dress cost label. Previously each preview frame repeatedly scanned loaded assemblies through Harmony's TypeByName helper, creating heavy CPU work while a coffin was selected.

@@ -19,7 +19,7 @@ namespace Bonehilda;
 public sealed class Plugin : BaseUnityPlugin
 {
     public const string Guid = "com.bonehilda.valheim";
-    public const string Version = "0.4.38";
+    public const string Version = "0.4.39";
     internal const string CoffinPrefab = "BH_Coffin";
     internal const string MaidPrefab = "BH_Bonehilda";
     internal static Plugin Instance = null!;
@@ -110,7 +110,7 @@ public sealed class Plugin : BaseUnityPlugin
             new ConfigurationManagerAttributes { IsAdminOnly = true }));
         DoorEnemyRadius = Setting("Maid", "DoorEnemyCheckRadius", 10f, "Do not open a door if an enemy is this close to the maid or door, in meters.", 5f, 50f);
         ActivityLogging = Config.Bind("Debugging", "ActivityLogging", false, "Write loaded maid activity, target, path, and cargo snapshots every two seconds to Bonehilda.activity.json and a bounded history log. Local diagnostics only.");
-        TameCrowdEnabled = Config.Bind("Experimental", "TameCrowdEnabled", true, new ConfigDescription("Experimental local bypasses around nearby tames. Disable for the unchanged native navigation baseline.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
+        TameCrowdEnabled = Config.Bind("Experimental", "TameCrowdEnabled", true, new ConfigDescription("Local bypasses around nearby tames. Disable for native navigation. This section name is retained for configuration compatibility.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         TameShooEnabled = Config.Bind("Experimental", "TameShooEnabled", true, new ConfigDescription("Shoo calm, waiting tames in a cone along the maid's walking direction when a short bypass is unavailable. Try alternate retreats without crossing the maid. No shoo animation. Disable to test bypasses alone.", null, new ConfigurationManagerAttributes { IsAdminOnly = true }));
         TameShooRadius = Setting("Experimental", "TameShooRadius", 4f, "Radius in front of the maid affected by a shoo pulse. Up to 12 eligible tames per pulse, outermost first. No animals behind her.", 2f, 6f);
         TameShooAngle = Setting("Experimental", "TameShooAngle", 120f, "Full angle of the forward shoo cone in degrees.", 60f, 180f);

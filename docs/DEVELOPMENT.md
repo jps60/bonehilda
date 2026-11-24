@@ -6,7 +6,7 @@ Future animation assets and their conditional runtime integration are tracked in
 
 A little **Makin' Magic** for your mead hall. A Valheim BepInEx/Jötunn mod that adds a buildable coffin and a skeletal maid who maintains your base. Leave the chores to Bonehilda; her free will is switched on, and she has no bladder bar to worry about.
 
-**Version 0.4.38.** This guide records implementation details and developer test scenarios. Use the [public README](../README.md) for installation and the [server matrix](SERVER.md) for current validation status. Historical local probes do not establish dedicated-server compatibility.
+**Version 0.4.39.** This guide records implementation details and developer test scenarios. Use the [public README](../README.md) for installation and the [server matrix](SERVER.md) for current validation status. Historical local probes do not establish dedicated-server compatibility.
 
 ## Playing
 

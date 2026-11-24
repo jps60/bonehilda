@@ -1,17 +1,16 @@
 # Bonehilda
 
-**Experimental tame-shoo branch. Not merged into main.** This preview adds local bypasses and a persistent forward shoo cone. Calm waiting tames search for a clear retreat at several angles, avoiding the maid and doors. No shoo animation is included. Keep your normal r2modman profile on the stable release; test this ZIP in a separate profile. See [the experiment report](https://github.com/jps60/bonehilda/blob/v0.4.38-experiment.1/docs/experiments/tame-shoo/REPORT.md).
-
-[Download the experimental ZIP](https://github.com/jps60/bonehilda/releases/download/v0.4.38-experiment.1/Bonehilda-0.4.38.zip). This prerelease does not replace the stable release.
+[Download Bonehilda 0.4.39](https://github.com/jps60/bonehilda/releases/download/v0.4.39/Bonehilda-0.4.39.zip).
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.38 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.39 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
-![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.38-experiment.1/assets/icon.png)
+![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.39/assets/icon.png)
 
 ## What she does
 
+- Walks around tames when practical, then uses a moving shoo cone to clear a crowded route. Calm waiting tames choose safe retreats that avoid the maid, doors and unsupported ground. No custom shoo animation is included.
 - Repairs player-built structures with a hammer, using player repair reach and the appropriate crafting station's coverage.
 - Carries supplies from her own coffin to fires, torches, braziers, smelters, kilns, windmills, spinning wheels, refineries, fermenters, shield generators, and ballistae. Cooking stations and obliterators are excluded.
 - Starts refueling below 25% capacity or an estimated two minutes of burn time, then continues until full. Delivers one item per trip, at most one per second by default.

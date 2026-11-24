@@ -1,6 +1,6 @@
 # Tame shoo experiment
 
-**Branch: `experiment/tame-shoo`. Not merged into main.** No custom shoo animation or new audio is included. The normal r2modman profile stays on the stable build. This experiment does not change where the AI runs or keep areas loaded.
+**Merged into main for stable release 0.4.39.** This report preserves the experiment's measurements and validation history. No custom shoo animation or new audio is included. Shooing does not change where the AI runs or keep areas loaded. Configuration keys remain in the historically named `Experimental` section to preserve existing settings.
 
 ## Current preview: 0.4.36
 
