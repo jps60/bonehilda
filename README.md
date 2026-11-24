@@ -1,14 +1,14 @@
 # Bonehilda
 
-**Animation drafts for review.** This branch adds left/right/two-arm shoo gestures with skeleton rattles, plus three manual Kvastur sweep previews. The [review guide and motion catalog](https://github.com/jps60/bonehilda/blob/v0.4.40-experiment.1/docs/animation-drafts/README.md) lists uncertain poses, sound choices, tool calibration and stretch dusting trajectories. Automatic rug sweeping and new dusting targets are not enabled. Stable main remains on 0.4.39.
+**Animation drafts for review.** This branch adds left/right/two-arm shoo gestures with skeleton rattles, plus three manual Kvastur sweep previews. The [review guide and motion catalog](https://github.com/jps60/bonehilda/blob/v0.4.41-experiment.1/docs/animation-drafts/README.md) lists uncertain poses, sound choices, tool calibration and stretch dusting trajectories. Automatic rug sweeping and new dusting targets are not enabled. Stable main remains on 0.4.39.
 
-[Download draft 0.4.40](https://github.com/jps60/bonehilda/releases/download/v0.4.40-experiment.1/Bonehilda-0.4.40.zip).
+[Download draft 0.4.41](https://github.com/jps60/bonehilda/releases/download/v0.4.41-experiment.1/Bonehilda-0.4.41.zip).
 
 **A little Makin' Magic for your mead hall.** Build a coffin, stock it with supplies, and let a tame skeletal maid handle the chores. Free will is enabled; a bladder bar is mercifully absent.
 
-**Version 0.4.40 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
+**Version 0.4.41 · Author: Swiftfingers · BepInEx / Jötunn · Work in progress**
 
-![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.40-experiment.1/assets/icon.png)
+![Bonehilda](https://raw.githubusercontent.com/jps60/bonehilda/v0.4.41-experiment.1/assets/icon.png)
 
 ## What she does
 

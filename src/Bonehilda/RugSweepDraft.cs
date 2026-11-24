@@ -12,9 +12,15 @@ internal sealed class RugSweepDraft : MonoBehaviour
     private Maid maid = null!;
     private ZNetView view = null!;
     private ShooGesture.Arm left = null!, right = null!;
+    private Transform spine = null!, gaze = null!;
+    private Quaternion spineRest, gazeRest;
+    private bool bodyPosed;
     private GameObject? tool;
     private Vector3 axis, tip;
-    private float length;
+    private Vector3[] modelVertices = Array.Empty<Vector3>();
+    private float length, visualScale;
+    internal float LeftGripError { get; private set; }
+    internal float RightGripError { get; private set; }
     private bool failedTool;
     private bool CanPreview => maid.AvailableForSocial && SessionSupport.Active && !maid.GetComponent<Character>().IsDead()
         && !maid.GetComponent<MaidSeating>().Attached && view.GetZDO().GetString("BH_idleEmote").Length == 0
@@ -28,6 +34,7 @@ internal sealed class RugSweepDraft : MonoBehaviour
         maid = GetComponent<Maid>(); view = GetComponent<ZNetView>();
         var animator = GetComponentInChildren<Animator>();
         left = new ShooGesture.Arm(animator, true); right = new ShooGesture.Arm(animator, false);
+        spine = animator.GetBoneTransform(HumanBodyBones.Spine); gaze = animator.GetBoneTransform(HumanBodyBones.Head);
     }
     internal bool Begin(Piece rug, int variant, bool flip)
     {
@@ -39,8 +46,12 @@ internal sealed class RugSweepDraft : MonoBehaviour
         data.Set(StartKey, ZNet.instance.GetTime().Ticks);
         return true;
     }
-    private void Update() { left?.Restore(); right?.Restore(); }
-    private void OnDisable() { left?.Restore(); right?.Restore(); if (tool) tool!.SetActive(false); }
+    private void Update()
+    {
+        left?.Restore(); right?.Restore();
+        if (bodyPosed) { spine.localRotation = spineRest; gaze.localRotation = gazeRest; bodyPosed = false; }
+    }
+    private void OnDisable() { Update(); if (tool) tool!.SetActive(false); }
     private void OnDestroy() { if (tool) Destroy(tool); }
 
     private bool BuildTool()
@@ -85,6 +96,11 @@ internal sealed class RugSweepDraft : MonoBehaviour
         }
         axis = bounds.size.x >= bounds.size.y && bounds.size.x >= bounds.size.z ? Vector3.right : bounds.size.y >= bounds.size.z ? Vector3.up : Vector3.forward;
         length = Vector3.Dot(bounds.size, axis); tip = bounds.center - axis * length * .5f;
+        // Bone lengths are pose-independent, unlike the current head height.
+        // Include this maid's star-tier scale without fitting to a bent knee.
+        visualScale = Mathf.Clamp(FittedLength(GetComponentInChildren<Animator>()) / length, .35f, 1.1f);
+        modelVertices = filters.Where(f => f.sharedMesh.isReadable).SelectMany(f => f.sharedMesh.vertices
+            .Select(p => tool.transform.InverseTransformPoint(f.transform.TransformPoint(p)))).ToArray();
         tool.SetActive(false);
         return length > .1f;
     }
@@ -106,28 +122,64 @@ internal sealed class RugSweepDraft : MonoBehaviour
         var bounds = colliders[0].bounds; foreach (var collider in colliders.Skip(1)) bounds.Encapsulate(collider.bounds);
         if (Vector3.Distance(transform.position, bounds.ClosestPoint(transform.position)) > 1.5f) { Stop(); return; }
         var elapsed = (float)((ZNet.instance.GetTime().Ticks - data.GetLong(StartKey)) / (double)TimeSpan.TicksPerSecond);
-        var phase = elapsed / 5f * Mathf.PI * 6;
         var variant = data.GetInt("BH_sweepDraftVariant");
-        var x = Mathf.Sin(phase) * (variant == 0 ? .26f : variant == 1 ? .48f : .46f);
-        var z = variant == 0 ? .38f * Mathf.Cos(phase) : variant == 1 ? .16f * Mathf.Cos(phase * 2) : .34f * Mathf.Sin(phase + .6f);
-        var head = bounds.center + transform.right * (x * Mathf.Min(1, bounds.size.x / 1.4f))
-            + transform.forward * (z * Mathf.Min(1, bounds.size.z)); head.y = bounds.max.y + .025f;
-        var shaft = (Vector3.up - transform.forward * .25f).normalized;
+        var phase = Mathf.Repeat(Mathf.Clamp01((elapsed - .45f) / 4.1f) * (variant == 0 ? 2f : 3f), 1f);
+        // Draw slowly along the rug, lift slightly, then reset more quickly.
+        // The recovery is distinct from a working pass, rather than an ellipse.
+        var working = phase < .65f;
+        var stroke = working ? Mathf.SmoothStep(0, 1, phase / .65f) : 1 - Mathf.SmoothStep(0, 1, (phase - .65f) / .35f);
+        var x = variant == 0 ? -.12f + .08f * stroke : variant == 1 ? -.15f + .30f * stroke : -.20f + .40f * stroke;
+        var z = variant == 0 ? .10f - .20f * stroke : variant == 1 ? .08f - .15f * stroke : .10f - .18f * stroke;
+        var anchor = bounds.ClosestPoint(transform.position + transform.forward * .32f);
+        var head = bounds.ClosestPoint(anchor + transform.right * x + transform.forward * z);
+        head.y = bounds.max.y + .012f + (working ? 0f : .045f * Mathf.Sin((phase - .65f) / .35f * Mathf.PI));
+        var shaft = (Vector3.up + transform.forward * (.025f - .05f * stroke) + transform.right * (x * .05f)).normalized;
         // Conservative whole-handle obstruction check. Real Kvastur bristle/grip
         // alignment is deliberately exposed for review rather than certified.
-        if (Physics.CapsuleCastAll(head + Vector3.up * .12f, head + shaft * length, .035f, transform.forward, .01f,
+        if (Physics.CapsuleCastAll(head + Vector3.up * .12f, head + shaft * (length * visualScale), .035f, transform.forward, .01f,
             RepairGeometry.Solids, QueryTriggerInteraction.Ignore).Any(h => h.collider.GetComponentInParent<Piece>() != rug)) { Stop(); return; }
         var flip = data.GetBool("BH_sweepDraftFlip") ? -1 : 1;
         tool!.SetActive(true); tool.transform.rotation = Quaternion.FromToRotation(axis * flip, shaft);
         var actualTip = flip == 1 ? tip : tip + axis * length;
-        // Counter parent scale: preserve the native Kvastur model's physical dimensions.
+        // Counter parent scale, then apply the stature-fitted broom scale.
         var parentScale = transform.lossyScale;
-        tool.transform.localScale = new Vector3(1 / parentScale.x, 1 / parentScale.y, 1 / parentScale.z);
-        tool.transform.position = head - tool.transform.rotation * actualTip;
+        tool.transform.localScale = new Vector3(visualScale / parentScale.x, visualScale / parentScale.y, visualScale / parentScale.z);
+        tool.transform.position = head - tool.transform.rotation * (actualTip * visualScale);
+        // The hooked handle is offset from the overall bounding-box axis.
+        // Fit hands to its measured cross sections, not the box centreline.
+        if (modelVertices.Length > 0)
+        {
+            var bottom = modelVertices.Min(p => tool.transform.TransformPoint(p).y);
+            tool.transform.position += Vector3.up * (head.y - bottom);
+        }
         var blend = Mathf.SmoothStep(0, 1, Mathf.Min(elapsed / .4f, (5 - elapsed) / .4f));
-        var bodyScale = Mathf.Max(.5f, (left.Upper.position.y - transform.position.y) / 1.4f);
-        left.ReachTarget(transform, head + shaft * Mathf.Min(length * .78f, 1.25f * bodyScale), blend);
-        right.ReachTarget(transform, head + shaft * Mathf.Min(length * .53f, .95f * bodyScale), blend);
+        spineRest = spine.localRotation; gazeRest = gaze.localRotation; bodyPosed = true;
+        spine.rotation = Quaternion.AngleAxis(12f * blend, transform.right) * spine.rotation;
+        gaze.rotation = Quaternion.AngleAxis(12f * blend, transform.right) * gaze.rotation;
+        var shoulderHeight = left.Upper.position.y - head.y;
+        LeftGripError = left.GripShaft(transform, tool.transform.TransformPoint(ShaftPoint(Mathf.Min(length * .84f, (shoulderHeight + .02f) / visualScale), flip)), shaft, blend);
+        RightGripError = right.GripShaft(transform, tool.transform.TransformPoint(ShaftPoint(Mathf.Min(length * .75f, (shoulderHeight - .13f) / visualScale), flip)), shaft, blend);
+    }
+
+    private Vector3 ShaftPoint(float distance, int flip)
+    {
+        var start = flip == 1 ? tip : tip + axis * length;
+        var samples = modelVertices.Where(p => Mathf.Abs(Vector3.Dot(p - start, axis * flip) - distance) < .045f).ToArray();
+        if (samples.Length == 0) return start + axis * (flip * distance);
+        var center = Vector3.zero; foreach (var p in samples) center += p;
+        return center / samples.Length;
+    }
+
+    internal static float FittedLength(Animator animator)
+    {
+        var hips = animator.GetBoneTransform(HumanBodyBones.Hips);
+        var bone = animator.GetBoneTransform(HumanBodyBones.Head);
+        var size = .12f * animator.transform.lossyScale.y;
+        while (bone && bone != hips && bone.parent) { size += Vector3.Distance(bone.position, bone.parent.position); bone = bone.parent; }
+        var thigh = animator.GetBoneTransform(HumanBodyBones.LeftUpperLeg);
+        var shin = animator.GetBoneTransform(HumanBodyBones.LeftLowerLeg);
+        var foot = animator.GetBoneTransform(HumanBodyBones.LeftFoot);
+        return .8f * (size + Vector3.Distance(hips.position, thigh.position) + Vector3.Distance(thigh.position, shin.position) + Vector3.Distance(shin.position, foot.position));
     }
 }
 

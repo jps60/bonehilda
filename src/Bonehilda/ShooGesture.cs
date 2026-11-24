@@ -63,6 +63,8 @@ internal sealed class ShooGesture : MonoBehaviour
     {
         internal readonly Transform Upper, Lower, Hand;
         private readonly Transform index, little;
+        private readonly Transform[] fingerBones;
+        private readonly Quaternion[] fingerRest;
         private readonly float side;
         private Quaternion upperRest, lowerRest, handRest;
         private bool posed;
@@ -74,15 +76,33 @@ internal sealed class ShooGesture : MonoBehaviour
             Hand = animator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
             index = animator.GetBoneTransform(left ? HumanBodyBones.LeftIndexProximal : HumanBodyBones.RightIndexProximal);
             little = animator.GetBoneTransform(left ? HumanBodyBones.LeftLittleProximal : HumanBodyBones.RightLittleProximal);
+            var bones = new System.Collections.Generic.List<Transform>();
+            foreach (var name in new[] { "Thumb", "Index", "Middle", "Ring", "Little" })
+            {
+                var bone = animator.GetBoneTransform((HumanBodyBones)Enum.Parse(typeof(HumanBodyBones), (left ? "Left" : "Right") + name + "Proximal"));
+                for (var i = 0; i < 3; i++)
+                {
+                    if (bone == null) break;
+                    bones.Add(bone);
+                    bone = bone.childCount > 0 ? bone.GetChild(0) : null;
+                }
+            }
+            fingerBones = bones.ToArray(); fingerRest = new Quaternion[fingerBones.Length];
+        }
+        private void Capture()
+        {
+            upperRest = Upper.localRotation; lowerRest = Lower.localRotation; handRest = Hand.localRotation; posed = true;
+            for (var i = 0; i < fingerBones.Length; i++) fingerRest[i] = fingerBones[i].localRotation;
         }
         internal void Apply(Transform root, ShooPose pose, float width, float length)
         {
             if (!Upper || !Lower || !Hand) return;
-            upperRest = Upper.localRotation; lowerRest = Lower.localRotation; handRest = Hand.localRotation; posed = true;
+            Capture();
             var center = Upper.position - root.right * (side * width * .5f);
             var target = center + root.right * (side * width * pose.Spread) + Vector3.up * (pose.Lift * length)
                 + root.forward * (pose.Reach * length);
-            DustingStance.Reach(Upper, Lower, Hand.position, target, root.right * side - root.forward * .2f, pose.Blend);
+            DustingStance.Reach(Upper, Lower, Hand.position, target,
+                root.right * (side * .5f) - Vector3.up * .8f - root.forward * .2f, pose.Blend);
             if (!index || !little) return;
             var fingers = (index.position + little.position) * .5f - Hand.position;
             var dorsal = Vector3.Cross(index.position - little.position, fingers) * side;
@@ -96,8 +116,51 @@ internal sealed class ShooGesture : MonoBehaviour
         internal void ReachTarget(Transform root, Vector3 target, float blend)
         {
             if (!Upper || !Lower || !Hand) return;
-            upperRest = Upper.localRotation; lowerRest = Lower.localRotation; handRest = Hand.localRotation; posed = true;
+            Capture();
             DustingStance.Reach(Upper, Lower, Hand.position, target, root.right * side - root.forward * .25f, blend);
+        }
+        internal float GripShaft(Transform root, Vector3 center, Vector3 shaft, float blend)
+        {
+            if (!Upper || !Lower || !Hand || !index || !little) return float.PositiveInfinity;
+            Capture();
+            var fingers = (index.position + little.position) * .5f - Hand.position;
+            var dorsal = Vector3.Cross(index.position - little.position, fingers) * side;
+            var back = Vector3.ProjectOnPlane(root.right * side, shaft).normalized;
+            var alongFingers = Vector3.Cross(shaft, back).normalized;
+            if (fingers.sqrMagnitude > .000001f && dorsal.sqrMagnitude > .000001f)
+                Hand.rotation = Quaternion.LookRotation(alongFingers, back)
+                    * Quaternion.Inverse(Quaternion.LookRotation(fingers, dorsal)) * Hand.rotation;
+            // Fit the palm to the cylinder, rather than putting the wrist on it.
+            var palm = (index.position + little.position) * .5f;
+            var contact = center + back * .023f;
+            var pole = root.right * (side * .5f) - Vector3.up * .65f - root.forward * .25f;
+            DustingStance.Reach(Upper, Lower, palm, contact, pole, 1f);
+            // Re-establish hand orientation after the elbow solve.
+            fingers = (index.position + little.position) * .5f - Hand.position;
+            dorsal = Vector3.Cross(index.position - little.position, fingers) * side;
+            if (fingers.sqrMagnitude > .000001f && dorsal.sqrMagnitude > .000001f)
+                Hand.rotation = Quaternion.LookRotation(alongFingers, back)
+                    * Quaternion.Inverse(Quaternion.LookRotation(fingers, dorsal)) * Hand.rotation;
+            palm = (index.position + little.position) * .5f;
+            DustingStance.Reach(Upper, Lower, palm, contact, pole, 1f);
+            // Curl each segment toward the handle; constrain changes so knuckles
+            // retain their native spacing and cannot reverse through the palm.
+            foreach (var bone in fingerBones)
+            {
+                if (bone.childCount == 0) continue;
+                var end = bone.GetChild(0).position;
+                var nearest = center + shaft * Vector3.Dot(end - center, shaft);
+                var radial = Vector3.ProjectOnPlane(end - center, shaft).normalized;
+                var goal = nearest + radial * .025f;
+                var turn = Quaternion.FromToRotation(end - bone.position, goal - bone.position);
+                bone.rotation = Quaternion.RotateTowards(Quaternion.identity, turn, 48f) * bone.rotation;
+            }
+            var error = Vector3.Distance((index.position + little.position) * .5f, contact);
+            Upper.localRotation = Quaternion.Slerp(upperRest, Upper.localRotation, blend);
+            Lower.localRotation = Quaternion.Slerp(lowerRest, Lower.localRotation, blend);
+            Hand.localRotation = Quaternion.Slerp(handRest, Hand.localRotation, blend);
+            for (var i = 0; i < fingerBones.Length; i++) fingerBones[i].localRotation = Quaternion.Slerp(fingerRest[i], fingerBones[i].localRotation, blend);
+            return error;
         }
         internal void Restore()
         {
@@ -105,6 +168,7 @@ internal sealed class ShooGesture : MonoBehaviour
             if (Upper) Upper.localRotation = upperRest;
             if (Lower) Lower.localRotation = lowerRest;
             if (Hand) Hand.localRotation = handRest;
+            for (var i = 0; i < fingerBones.Length; i++) fingerBones[i].localRotation = fingerRest[i];
             posed = false;
         }
     }

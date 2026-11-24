@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.41
+
+- Follow the original housekeeping PR's development process: authored runtime beats, fitted grip/IK, native two-angle captures and measured grip residuals. Add the reproducible private capture routine and native video review player.
+- Replace periodic shoo timing with anticipation, an uneven guiding flick, a smaller second invitation and soft recovery; relax elbow planes while preserving native stride.
+- Scale Kvastur from each maid's pose-independent skeleton lengths. Fit palms/fingers to measured shaft cross sections, distinguish working strokes from lifted resets, and add a small upper-body lean and gaze toward the rug. Sweeping remains a manual review feature.
+- Keep expanded dusting targets and unresolved animation/audio quality in the review queue; stable main remains unchanged.
+
 ## 0.4.40
 
 - Draft branch only: three additive upper-body shoo gestures (left, right, both) preserve stride and lower-body animation. Owner-selected pose/start time, native skeleton idle rattles, hammer-hand preference and interaction/dismissal preemption.

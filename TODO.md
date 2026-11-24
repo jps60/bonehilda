@@ -1,6 +1,6 @@
 # Next build queue
 
-- [ ] Review the procedural animation drafts on `experiment/animation-drafts`: [guide](docs/animation-drafts/README.md), [schematic player](docs/animation-drafts/preview.html). Three shoo poses and three manual Kvastur sweep previews are playable; expanded dusting remains trajectory drafts. Keep wrist/palm, both-arm amplitude, skeleton sound, native Kvastur bristle/grip alignment, floor/overhead reach and every requested target type in the review queue. Main's automatic cleaning coverage is unchanged.
+- [ ] Review the procedural animation drafts on `experiment/animation-drafts`: [guide](docs/animation-drafts/README.md), [native recordings](docs/animation-drafts/native-review.html), [development chain](docs/animation-drafts/DEVELOPMENT-CHAIN.md), [schematic player](docs/animation-drafts/preview.html). Three shoo poses and three manual Kvastur sweep previews are playable; expanded dusting remains trajectory drafts. Keep wrist/palm, both-arm amplitude, skeleton sound, native Kvastur bristle/grip alignment, floor/overhead reach and every requested target type in the review queue. Main's automatic cleaning coverage is unchanged.
 
 - [x] Allow hot-tub sitting only while the native fireplace is burning; leave if it stops.
 - [x] Reproduce the multi-level windmill route in a private saved-base copy. Correct doorway floor sampling, bent/multiple-door routing and progress-based job timeouts without changing native interaction reach. See [0.4.29 validation](docs/validation-0.4.29.md).

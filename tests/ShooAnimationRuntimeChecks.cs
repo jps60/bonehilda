@@ -59,9 +59,12 @@ internal static class ShooAnimationRuntimeChecks
         var visual = (GameObject)AccessTools.Field(sweep.GetType(), "tool").GetValue(sweep);
         var visualLength = (float)AccessTools.Field(sweep.GetType(), "length").GetValue(sweep);
         if (visualLength < .3f || visualLength > 5f) throw new Exception("Kvastur unit conversion failed: " + visualLength);
+        var scale = (float)AccessTools.Field(sweep.GetType(), "visualScale").GetValue(sweep);
+        var expectedLength = (float)AccessTools.Method(sweep.GetType(), "FittedLength").Invoke(null, new object[] { animator });
+        if (Mathf.Abs(visualLength * scale - expectedLength) > .01f) throw new Exception("Broom does not fit maid stature");
         if (visual.GetComponentsInChildren<MonoBehaviour>(true).Length != 0 || visual.GetComponentsInChildren<Collider>(true).Length != 0
             || visual.GetComponentsInChildren<Rigidbody>(true).Length != 0) throw new Exception("Kvastur review prop contains gameplay behavior");
-        Debug.Log("SWEEP VISUAL PASS: native BogWitchKvastur renderer data only; length=" + AccessTools.Field(sweep.GetType(), "length").GetValue(sweep));
+        Debug.Log("SWEEP VISUAL PASS: native BogWitchKvastur renderer data only; nativeLength=" + visualLength + "; fittedLength=" + (visualLength * scale));
         view.GetZDO().Set("BH_returning", false);
         var rugPrefab = ZNetScene.instance.m_prefabs.First(p => p && p.GetComponent<Piece>() && p.name.StartsWith("rug_", StringComparison.Ordinal));
         var rug = UnityEngine.Object.Instantiate(rugPrefab, worker.transform.position + worker.transform.forward * .6f, Quaternion.identity);
