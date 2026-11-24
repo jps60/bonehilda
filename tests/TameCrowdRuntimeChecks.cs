@@ -31,13 +31,101 @@ internal static class TameCrowdRuntimeChecks
     }
     // Isolated probes only: creates temporary actors/geometry and moves the private observer.
     internal static IEnumerator Run(Vector3 origin) {
-        var routine=RunCore(origin);
+        AudioListener.volume=0f; AudioListener.pause=true;
+        var routine=File.Exists(Path.Combine(Paths.ConfigPath,"shoo-area.test")) ? RunArea(origin) : RunCore(origin);
         while(true) {
             bool next; object value;
             try { next=routine.MoveNext(); value=next?routine.Current:null; }
             catch(Exception error) { Debug.LogError("SHOO BENCH FAIL: "+error); Application.Quit(2); throw; }
             if(!next)yield break; yield return value;
         }
+    }
+    private static IEnumerator RunArea(Vector3 origin)
+    {
+        if (!Environment.GetCommandLineArgs().Contains("-nographics") || !Environment.GetCommandLineArgs().Contains("-savedir"))
+            throw new Exception("Area shoo fixtures require private headless saves");
+        while(!Player.m_localPlayer) yield return null;
+        Player.m_localPlayer.SetGodMode(true);
+        Player.m_localPlayer.TeleportTo(origin+new Vector3(-9,1,-9),Quaternion.identity,true);
+        ZNet.instance.SetReferencePosition(origin);
+        var floor=Box("Private area shoo floor",origin+new Vector3(0,-.1f,2),new Vector3(28,.2f,28));
+        yield return new WaitForSecondsRealtime(3);
+        foreach(var scenario in new[]{"alternate","replan","pack-persistent"})
+        {
+            var spawned=new List<GameObject>();
+            var coffin=UnityEngine.Object.Instantiate(ZNetScene.instance.GetPrefab("BH_Coffin_0Star"),origin+new Vector3(9,.05f,0),Quaternion.identity);
+            spawned.Add(coffin); ((MonoBehaviour)coffin.GetComponent("Coffin")).enabled=false;
+            var worker=UnityEngine.Object.Instantiate(ZNetScene.instance.GetPrefab("BH_Bonehilda"),origin+Vector3.up*.05f,Quaternion.identity);
+            spawned.Add(worker); var maid=(MonoBehaviour)worker.GetComponent("Maid"); maid.enabled=false;
+            var assembly=maid.GetType().Assembly;
+            Config(assembly,"TameCrowdEnabled",true); Config(assembly,"TameShooEnabled",true);
+            AccessTools.Method(maid.GetType(),"Bind").Invoke(maid,new object[]{coffin.GetComponent("Coffin"),false});
+            var creator=AccessTools.Method(typeof(Piece),"SetCreator");
+            var creatorArgs=creator.GetParameters().Select(p=>p.ParameterType.IsValueType?Activator.CreateInstance(p.ParameterType):null).ToArray();
+            creatorArgs[0]=Player.m_localPlayer.GetPlayerID();creator.Invoke(coffin.GetComponent<Piece>(),creatorArgs);
+            var wolves=new List<GameObject>();
+            var positions=scenario=="pack-persistent" ? new[]{new Vector3(-1.6f,.05f,2.3f),new Vector3(0,.05f,3),new Vector3(1.6f,.05f,2.3f)} : new[]{new Vector3(0,.05f,2.1f)};
+            foreach(var position in positions) { var wolf=AreaWolf(origin+position); wolves.Add(wolf); spawned.Add(wolf); }
+            var behind=AreaWolf(origin+new Vector3(0,.05f,-3));spawned.Add(behind);
+            GameObject entrant=null;
+            if(scenario=="pack-persistent") { entrant=AreaWolf(origin+new Vector3(3.5f,.05f,.2f));spawned.Add(entrant); }
+            if(scenario=="alternate") spawned.Add(Box("Private straight retreat wall",origin+new Vector3(0,1.25f,4.2f),new Vector3(1.2f,2.5f,.25f)));
+            Physics.SyncTransforms();yield return new WaitForSecondsRealtime(.5f);
+            var crowd=AccessTools.Field(maid.GetType(),"crowd").GetValue(maid);
+            var tick=AccessTools.Method(crowd.GetType(),"Tick");
+            var yieldType=assembly.GetType("Bonehilda.TameYield");
+            var started=Time.realtimeSinceStartup;var inserted=false;var entered=false;var sawReplan=false;var pulseStarted=-1f;
+            while(Time.realtimeSinceStartup-started<10)
+            {
+                ZNet.instance.SetReferencePosition(origin);
+                tick.Invoke(crowd,new object[]{maid,worker.GetComponent<MonsterAI>(),origin+Vector3.forward*10,Time.fixedDeltaTime,false,false,false});
+                var pulseUntil=(float)AccessTools.Field(crowd.GetType(),"shooUntil").GetValue(crowd);
+                if(pulseStarted<0 && pulseUntil>Time.time) pulseStarted=Time.time;
+                if(entrant && !entered && pulseStarted>0 && Time.time-pulseStarted>.6f)
+                { entrant.transform.position=origin+new Vector3(2.4f,.05f,1.8f);Physics.SyncTransforms();entered=true; }
+                if(scenario=="replan" && !inserted && wolves[0].GetComponent<ZNetView>().GetZDO().GetInt("BH_shooAccepted")>0)
+                {
+                    var receiver=wolves[0].GetComponent("TameYield");
+                    var target=(Vector3)AccessTools.Field(yieldType,"LastTarget").GetValue(receiver);
+                    var center=Vector3.Lerp(wolves[0].transform.position,target,.65f)+Vector3.up;
+                    spawned.Add(Box("Private new retreat obstruction",center,new Vector3(.7f,2,.7f)));Physics.SyncTransforms();inserted=true;
+                }
+                foreach(var wolf in wolves)
+                {
+                    var offset=wolf.transform.position-worker.transform.position;offset.y=0;
+                    if(offset.magnitude<.65f) throw new Exception("Retreat crossed the maid in "+scenario);
+                    var receiver=wolf.GetComponent("TameYield");
+                    if((int)AccessTools.Field(yieldType,"replans").GetValue(receiver)>0) sawReplan=true;
+                }
+                yield return new WaitForFixedUpdate();
+            }
+            foreach(var wolf in wolves)
+                if(wolf.GetComponent<ZNetView>().GetZDO().GetInt("BH_shooAccepted")==0) throw new Exception("Pack member never accepted a retreat: "+scenario);
+            if(behind.GetComponent<ZNetView>().GetZDO().GetInt("BH_shooAccepted")!=0) throw new Exception("Area shoo affected a tame behind the maid");
+            if(entrant && entrant.GetComponent<ZNetView>().GetZDO().GetInt("BH_shooAccepted")==0) throw new Exception("Persistent area missed a late entrant");
+            if(scenario=="replan" && !sawReplan) throw new Exception("New obstruction did not trigger a replan");
+            foreach(var wolf in wolves)
+            {
+                var receiver=wolf.GetComponent("TameYield");
+                var outcome=(string)AccessTools.Property(yieldType,"MovementOutcome").GetValue(receiver,null);
+                if(!outcome.StartsWith("completed")) throw new Exception("Retreat failed to finish: "+scenario+" "+outcome);
+                Debug.Log("SHOO AREA PASS: "+scenario+" "+wolf.GetComponent<ZNetView>().GetZDO().m_uid+" "+outcome);
+            }
+            foreach(var obj in spawned)Remove(obj);
+            yield return new WaitForSecondsRealtime(.5f);
+        }
+        UnityEngine.Object.Destroy(floor);
+        Debug.Log("SHOO AREA COMPLETE: alternate direction, mid-walk replan, three-tame pack, persistent late entrant, behind-cone exclusion and maid clearance");
+    }
+
+    private static GameObject AreaWolf(Vector3 position)
+    {
+        var wolf=UnityEngine.Object.Instantiate(ZNetScene.instance.GetPrefab("Wolf"),position,Quaternion.identity);
+        wolf.GetComponent<Character>().SetTamed(true);
+        var ai=wolf.GetComponent<MonsterAI>();ai.m_randomMoveInterval=10000;ai.m_randomMoveRange=0;
+        AccessTools.Field(typeof(BaseAI),"m_reachedRandomMoveTarget").SetValue(ai,true);
+        AccessTools.Field(typeof(BaseAI),"m_randomMoveUpdateTimer").SetValue(ai,10000f);
+        return wolf;
     }
     private static IEnumerator RunCore(Vector3 origin) {
         if (!Environment.GetCommandLineArgs().Contains("-nographics") || !Environment.GetCommandLineArgs().Contains("-savedir")) throw new Exception("A private headless savedir is required for this destructive test fixture");

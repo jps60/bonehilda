@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.35
+
+- Experimental shooing now affects a forward cone (default 4 m / 120 degrees) for a configurable 3 seconds, following the maid and checking for new tames every half-second. Process up to 12 eligible tames per pulse, outermost first, preserving existing retreats and cooldowns.
+- Search up to 30 retreat candidates at different angles and distances, avoiding routes through the maid and reserving separate destinations. Keep supported ground, body clearance, ward, work-radius and no-door-crossing checks.
+- Retry up to three alternate destinations if an accepted retreat becomes blocked, within its original deadline and 5 m displacement limit.
+- Add cone/maid-clearance policy regressions and isolated native fixtures for alternate directions, moving obstructions, groups and late cone entrants.
+
 ## 0.4.34
 
 - Experimental branch diagnostics: report the last requested tame, request age and owner-side result in activity snapshots. Distinguish unavailable remote-owner results from actual rejections.

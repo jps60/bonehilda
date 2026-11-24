@@ -2,6 +2,18 @@
 
 **Branch: `experiment/tame-shoo`. Not merged into main.** No custom shoo animation or new audio is included. The normal r2modman profile stays on the stable build. This experiment does not change where the AI runs or keep areas loaded.
 
+## Current preview: 0.4.35
+
+Shooing now uses a moving forward cone: 4 m radius, 120 degrees, active for 3 seconds by default. `TameShooRadius`, `TameShooAngle` and `TameShooDuration` are configurable. Every half-second during the active window, up to 12 eligible tames are considered, outermost first. Animals already retreating or on cooldown keep their existing plans. A later pulse can reach additional animals in an unusually large group.
+
+Each tame searches up to 30 destinations at multiple angles and distances. A retreat may go sideways or around the maid, but its straight segment cannot cross her personal space. Destinations must have ground support, body clearance, ward permission, stay in the work radius, avoid doors/gates and stay clear of other reserved retreat destinations. Already touching tame bodies may separate without walking through one another. New obstructions trigger up to three replans within the existing eight-second deadline and 5 m displacement limit.
+
+Isolated native fixtures passed for an obstruction directly behind a wolf, an obstacle introduced after movement starts, a three-wolf group, a late entrant into the active cone, exclusion of a wolf behind the maid, and clearance around the maid. The three group wolves completed approximately 3.65-3.71 m retreats; the late entrant completed 4.67 m. These are correctness observations, not new delivery-throughput measurements. The first group test exposed contact-separation trouble; that was corrected before the passing rerun. The original world and PlayerPrefs were verified unchanged. Policy checks now total 414.
+
+Live 0.4.34 diagnosis established that failed straight-away requests were blocked by other wolves, maids, gates/doors and floor support. Two accepted retreats completed normally. This motivated the new search and group behavior; 0.4.35 still needs a live check on the user's crowded barley route.
+
+The timing measurements below belong to the original 0.4.33 prototype. They have not been repeated for the current area-shoo implementation.
+
 ## Measured navigation results
 
 Three repetitions per cell, 27 completed trials in total. Times below are medians in seconds; lower is better.
